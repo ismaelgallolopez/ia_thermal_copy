@@ -230,27 +230,25 @@ def PCB_solver_main(Lx:float,Ly:float,thickness:float,nx:int,ny:int,board_k:floa
 #%%
 
 ##########################################CREACIÓN DE LA CLASE########################################
+
 class PCBDataset(Dataset):
-    def __init__(self, inputs_tensor, outputs_tensor):
-        self.inputs = inputs_tensor
-        self.outputs = outputs_tensor
+    def __init__(self, inputs_dataset, outputs_dataset, scalar_dataset):
+
+        assert len(inputs_dataset) == len(outputs_dataset) == len(scalar_dataset), "All datasets must be of the same size"
+        self.inputs_dataset = inputs_dataset
+        self.outputs_dataset = outputs_dataset
+        self.scalar_dataset = scalar_dataset
 
     def __len__(self):
-        return len(self.inputs)
+
+        return len(self.inputs_dataset)
 
     def __getitem__(self, idx):
-        # Directly return the slices of the tensors
-        return self.inputs[idx], self.outputs[idx]
+        input_data = self.inputs_dataset[idx]
+        output_data = self.outputs_dataset[idx]
+        scalar_data = self.scalar_dataset[idx]
+        return input_data, output_data, scalar_data
 
-class VectorDataset(Dataset):
-    def __init__(self, vector):
-        self.vector = vector
-
-    def __len__(self):
-        return len(self.vector)
-
-    def __getitem__(self, idx):
-        return self.vector[idx]
     
 
 
@@ -260,11 +258,13 @@ class VectorDataset(Dataset):
 ################# CREACIÓN DEL DATASET #######################
 ##############################################################
 
-n_entradas = 50
+n_entradas = 7500
 nodos_lado = 13
 
 input = []
 output = []
+
+np.random.seed(2)
 
 #Generación de datos aleatorios para el dataset
 potenciasAleatorias = np.random.uniform(0.1, 5, (n_entradas, 4))
@@ -282,15 +282,15 @@ for i in range(n_entradas):
     output.append(resultados)
 
     #Normalizamos los inputs
-    potenciasAleatorias[i] = (potenciasAleatorias[i]-0.1)/5.
-    interfacesAleatorias[i] = (interfacesAleatorias[i]-250)/350
+    #potenciasAleatorias[i] = (potenciasAleatorias[i]-0.1)/5.
+    #interfacesAleatorias[i] = (interfacesAleatorias[i]-250)/350
 
 
     #Convertimos en matrices las potencias y temperaturas de las interfaces
     potencias = np.zeros((nodos_lado,nodos_lado))
     interfaces = np.zeros((nodos_lado,nodos_lado))
 
-    potencias[6,3], potencias[6,9], potencias[3,6], potencias[9,6] = potenciasAleatorias[i]
+    potencias[6,3], potencias[3,6], potencias[6,9], potencias[9,6] = potenciasAleatorias[i]
     interfaces[0,0], interfaces[0,nodos_lado-1], interfaces[nodos_lado-1,nodos_lado-1], interfaces[nodos_lado-1,0] = interfacesAleatorias[i]
 
     #Añadimos a los datos las matrices de entrada
@@ -300,7 +300,7 @@ for i in range(n_entradas):
     input.append(input1)
 
 #Normalizamos las Tenv
-TenvAleatorias = (TenvAleatorias-250)/350
+#TenvAleatorias = (TenvAleatorias-250)/350
 
 # %%
 
@@ -315,9 +315,7 @@ output = np.array(output)
 output = torch.tensor(output, dtype=torch.float32)
 
 #Guardamos el dataset
-dataset = PCBDataset(input, output)
-vectorset = VectorDataset(scalar_input)
+dataset = PCBDataset(input, output, scalar_input)
 torch.save(dataset, 'PCB_dataset.pth')
-torch.save(vectorset, 'PCB_dataset_scalar.pth')
 
 # %%

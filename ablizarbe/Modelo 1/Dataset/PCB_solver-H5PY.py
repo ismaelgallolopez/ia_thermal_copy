@@ -231,9 +231,10 @@ def PCB_solver_main(Lx:float,Ly:float,thickness:float,nx:int,ny:int,board_k:floa
 ################# EJEMPLO DE USO CON LOS VALORES PREDETERMINADOS #######################
 ######################################################################################## 
 
-n_entradas = 5000
+n_entradas = 10
 nodos_lado = 13
 
+np.random.seed(2)
 
 #Generación de datos aleatorios para el dataset
 potenciasAleatorias = np.random.uniform(0.1, 5, (n_entradas, 4))
@@ -249,7 +250,7 @@ with h5py.File('dataset_simetrico.h5', 'w') as f:
         potencias = np.zeros((nodos_lado,nodos_lado))
         interfaces = np.zeros((nodos_lado,nodos_lado))
 
-        potencias[6,3], potencias[6,9], potencias[3,6], potencias[9,6] = potenciasAleatorias[i]
+        potencias[6,3], potencias[3,6], potencias[6,9], potencias[9,6] = potenciasAleatorias[i]
         interfaces[0,0], interfaces[0,nodos_lado-1], interfaces[nodos_lado-1,nodos_lado-1], interfaces[nodos_lado-1,0] = interfacesAleatorias[i]
 
         # Obtener los resultados de la función
@@ -268,3 +269,5 @@ with h5py.File('dataset_simetrico.h5', 'w') as f:
 
 
 
+
+# %%
