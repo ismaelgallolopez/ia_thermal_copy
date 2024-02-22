@@ -266,8 +266,5 @@ with h5py.File('dataset_simetrico.h5', 'w') as f:
         # Guardar el valor en el grupo
         grupo.create_dataset('Tenv', data=TenvAleatorias[i])
 
-# %%
 
 
-# %%
-# %%
