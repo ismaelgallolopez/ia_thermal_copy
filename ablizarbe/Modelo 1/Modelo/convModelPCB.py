@@ -218,6 +218,9 @@ class Net(nn.Module):
     
 model = Net()
 model.cuda()
+criterion = nn.MSELoss()
+optimizer = optim.Adam(model.parameters(), lr=0.0001)
+scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=25)
 
 #%%
 ######################################
@@ -225,10 +228,6 @@ model.cuda()
 ######################################
 
 num_epochs = 400
-
-criterion = nn.MSELoss()
-optimizer = optim.Adam(model.parameters(), lr=0.0001)
-scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=25)
 
 for epoch in range(num_epochs):
     model.train()
@@ -266,8 +265,10 @@ for epoch in range(num_epochs):
     print(f"Epoch [{epoch+1}/{num_epochs}], Loss: {avg_loss:.4f}, Current LR: {last_lr}")
 # %%
 #Guardar el modelo
-torch.save(model.state_dict(), 'modelos\modelo_potencias.pth')
+torch.save(model.state_dict(), 'modelos\modelo_potenciasMOD.pth')
 
+# %%
+model.load_state_dict(torch.load('modelos\modelo_potencias.pth'))
 #%%
 #####################################
 ############# TEST LOOP #############
