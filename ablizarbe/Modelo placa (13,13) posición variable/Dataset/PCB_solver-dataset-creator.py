@@ -10,12 +10,17 @@ from torch.utils.data import Dataset
 np.set_printoptions(threshold=sys.maxsize)
 
 
+
+def posicion_matriz_a_vector(coordenadas, anchura_matriz=13):
+    i, j = coordenadas
+    return i * anchura_matriz + j
+
 #####################################################################################################
 ######################################### PCB_case_1() ##############################################
 #####################################################################################################
 
 def PCB_case_1(L:float=0.1,thickness:float=0.001,m:int=3,board_k:float=10,ir_emmisivity:float=0.8,
-                    T_interfaces:list=[250,250,250,250],Q_heaters:list=[1.0,1.0,1.0,1.0],Tenv:float=250,display:bool = False):
+                    T_interfaces:list=[250,250,250,250],Q_heaters:list=[1.0,1.0,1.0,1.0],Tenv:float=250,display:bool = False, posiciones:list=[(6,3),(3,6),(6,9),(9,6)]):
     """
     Caso 1. 
     PCB cuadrada de lado L con 4 heaters simétricamente colocados en coordenadas [(L/4,L/2),(L/2,L/4),(3*L/4,L/2),(L/2,3*L/4)]
@@ -38,7 +43,7 @@ def PCB_case_1(L:float=0.1,thickness:float=0.001,m:int=3,board_k:float=10,ir_emm
 
     n = 4*m+1
 
-    id_Qnodes = [int((n-1)/4+(n-1)/2*n),int((n-1)/2+(n-1)/4*n),int(3*(n-1)/4+(n-1)/2*n),int((n-1)/2+3*(n-1)/4*n)]
+    id_Qnodes = [posicion_matriz_a_vector(posiciones[0]),posicion_matriz_a_vector(posiciones[1]),posicion_matriz_a_vector(posiciones[2]),posicion_matriz_a_vector(posiciones[3])]
     heaters = {id_Qnodes[0]:Q_heaters[0],id_Qnodes[1]:Q_heaters[1],id_Qnodes[2]:Q_heaters[2],id_Qnodes[3]:Q_heaters[3]}
 
     id_inodes = [0,n-1,n*n-1,n*n-n]
@@ -258,7 +263,7 @@ class PCBDataset(Dataset):
 ################# CREACIÓN DEL DATASET #######################
 ##############################################################
 
-n_entradas = 20000
+n_entradas = 30000
 nodos_lado = 13
 
 input = []
@@ -271,26 +276,27 @@ potenciasAleatorias = np.random.uniform(0.1, 5, (n_entradas, 4))
 interfacesAleatorias = np.random.uniform(250, 350, (n_entradas, 4))
 TenvAleatorias = np.random.uniform(250, 350, n_entradas)
 
+posicionesAleatorias = []
+for _ in range(n_entradas):
+    coords = np.random.randint(0, 11, (4, 2))
+    lista_tuplas = [tuple(coord) for coord in coords]
+    posicionesAleatorias.append(lista_tuplas)
+posicionesAleatorias = np.array(posicionesAleatorias)
 
 for i in range(n_entradas):
 
     # Obtener los resultados de la función
-    resultados,__,_ = PCB_case_1(T_interfaces=interfacesAleatorias[i],Q_heaters=potenciasAleatorias[i],Tenv=TenvAleatorias[i])
+    resultados,__,_ = PCB_case_1(T_interfaces=interfacesAleatorias[i],Q_heaters=potenciasAleatorias[i],Tenv=TenvAleatorias[i],posiciones=posicionesAleatorias[i])
     resultados = resultados.reshape(nodos_lado,nodos_lado)
 
     #Añadimos a los datos las matrices de resultados
     output.append(resultados)
 
-    #Normalizamos los inputs
-    #potenciasAleatorias[i] = (potenciasAleatorias[i]-0.1)/5.
-    #interfacesAleatorias[i] = (interfacesAleatorias[i]-250)/350
-
-
     #Convertimos en matrices las potencias y temperaturas de las interfaces
     potencias = np.zeros((nodos_lado,nodos_lado))
     interfaces = np.zeros((nodos_lado,nodos_lado))
 
-    potencias[6,3], potencias[3,6], potencias[6,9], potencias[9,6] = potenciasAleatorias[i]
+    potencias[posicionesAleatorias[i,0,0],posicionesAleatorias[i,0,1]], potencias[posicionesAleatorias[i,1,0],posicionesAleatorias[i,1,1]], potencias[posicionesAleatorias[i,2,0],posicionesAleatorias[i,2,1]], potencias[posicionesAleatorias[i,3,0],posicionesAleatorias[i,3,1]] = potenciasAleatorias[i]
     interfaces[0,0], interfaces[0,nodos_lado-1], interfaces[nodos_lado-1,nodos_lado-1], interfaces[nodos_lado-1,0] = interfacesAleatorias[i]
 
     #Añadimos a los datos las matrices de entrada
@@ -299,8 +305,6 @@ for i in range(n_entradas):
     input1.append(interfaces)
     input.append(input1)
 
-#Normalizamos las Tenv
-#TenvAleatorias = (TenvAleatorias-250)/350
 
 # %%
 
