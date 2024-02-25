@@ -1,0 +1,440 @@
+#%%
+import torch
+import numpy as np
+
+#Pytorch dataset
+from torch.utils.data import Dataset, DataLoader
+from torch.utils.data.sampler import SubsetRandomSampler
+
+# PyTorch model
+import torch.nn as nn
+import torch.nn.functional as F
+import torch.optim as optim
+from torch.optim.lr_scheduler import ReduceLROnPlateau
+
+class PCBDataset(Dataset):
+    def __init__(self, inputs_dataset, outputs_dataset, scalar_dataset):
+
+        assert len(inputs_dataset) == len(outputs_dataset) == len(scalar_dataset), "All datasets must be of the same size"
+        self.inputs_dataset = inputs_dataset
+        self.outputs_dataset = outputs_dataset
+        self.scalar_dataset = scalar_dataset
+
+    def __len__(self):
+
+        return len(self.inputs_dataset)
+
+    def __getitem__(self, idx):
+
+        input_data = self.inputs_dataset[idx]
+        output_data = self.outputs_dataset[idx]
+        scalar_data = self.scalar_dataset[idx]
+        return input_data, output_data, scalar_data
+    
+
+class StandardScaler3D:
+    def __init__(self):
+        self.mean = None
+        self.std = None
+
+    def fit(self, tensor):
+        """
+        Calcula la media y la desviación estándar del tensor a lo largo de las dimensiones especificadas
+        y las almacena para su uso posterior.
+        """
+        # Calcula la media y la desviación estándar para el tensor
+        # Suponiendo que tensor tiene forma [batch_size, channels, height, width]
+        self.mean = tensor.mean(dim=[0, 2, 3], keepdim=True)
+        self.std = tensor.std(dim=[0, 2, 3], keepdim=True)
+
+    def transform(self, tensor):
+        """
+        Estandariza el tensor usando la media y la desviación estándar calculadas en el método fit.
+        """
+        if self.mean is None or self.std is None:
+            raise RuntimeError("StandardScaler3D no ha sido ajustado con datos; por favor, llama a .fit() primero.")
+        return (tensor - self.mean) / self.std
+
+    def fit_transform(self, tensor):
+        """
+        Combina los métodos fit y transform en una sola llamada para conveniencia.
+        """
+        self.fit(tensor)
+        return self.transform(tensor)
+
+class GlobalStandardScaler:
+    def __init__(self):
+        self.mean = None
+        self.std = None
+
+    def fit(self, tensor):
+        """
+        Calcula la media y la desviación estándar de todo el tensor.
+        """
+        self.mean = tensor.mean()
+        self.std = tensor.std()
+
+    def transform(self, tensor):
+        """
+        Estandariza el tensor usando la media y la desviación estándar globales calculadas en el método fit.
+        """
+        if self.mean is None or self.std is None:
+            raise RuntimeError("GlobalStandardScaler no ha sido ajustado con datos; por favor, llama a .fit() primero.")
+        return (tensor - self.mean) / (self.std + 1e-6)  # Se añade un pequeño valor para evitar la división por cero
+
+    def fit_transform(self, tensor):
+        """
+        Combina los métodos fit y transform en una sola llamada para conveniencia.
+        """
+        self.fit(tensor)
+        return self.transform(tensor)
+
+    def inverse_transform(self, tensor):
+        """
+        Desestandariza el tensor usando la media y la desviación estándar globales calculadas en el método fit.
+        """
+        if self.mean is None or self.std is None:
+            raise RuntimeError("GlobalStandardScaler no ha sido ajustado con datos; por favor, llama a .fit() primero.")
+        return tensor * self.std + self.mean
+
+#%%
+##############################################
+############# CARGANDO LOS DATOS #############
+##############################################
+    
+dataset = torch.load('PCB_dataset.pth')
+
+#Estandarizar los datos
+scaler_input = StandardScaler3D()
+scaler_scalar = GlobalStandardScaler()
+scaler_output = GlobalStandardScaler()
+
+scaled_input = scaler_input.fit_transform(dataset.inputs_dataset)
+scaled_scalar = scaler_scalar.fit_transform(dataset.scalar_dataset)
+scaled_output = scaler_output.fit_transform(dataset.outputs_dataset)
+
+
+dataset = PCBDataset(scaled_input, scaled_output, scaled_scalar)
+
+# Separando Train and Test
+batch_size = 64
+test_size = 0.1
+num_train = len(dataset)
+indices = list(range(num_train))
+np.random.shuffle(indices)
+split = int(np.floor(test_size * num_train))
+train_idx, test_idx = indices[split:], indices[:split]
+
+train_sampler = SubsetRandomSampler(train_idx)
+test_sampler = SubsetRandomSampler(test_idx)
+
+#Creando los Datalaoders
+train_loader = DataLoader(dataset, batch_size=batch_size, sampler=train_sampler)
+test_loader = DataLoader(dataset, batch_size=batch_size, sampler=test_sampler)
+
+
+
+#%%
+###################################################
+############# ARQUITECTURA DEL MODELO #############
+###################################################
+
+class TripleConv(nn.Module):
+    def __init__(self, in_channels, out_channels):
+        super().__init__()
+        self.triple_conv = nn.Sequential(
+            nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1),
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1),
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1),
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU(inplace=True)
+        )
+
+    def forward(self, x):
+        return self.triple_conv(x)
+
+class Down(nn.Module):
+    def __init__(self, in_channels, out_channels):
+        super().__init__()
+        self.maxpool_conv = nn.Sequential(
+            nn.MaxPool2d(2),
+            TripleConv(in_channels, out_channels)
+        )
+
+    def forward(self, x):
+        return self.maxpool_conv(x)
+
+class Up(nn.Module):
+    def __init__(self, in_channels, out_channels):
+        super().__init__()
+
+        self.up = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
+        self.conv = TripleConv(in_channels, out_channels) #in_channels // 2)
+
+
+    def forward(self, x1, x2):
+        x1 = self.up(x1)
+        # input is CHW
+        diffY = x2.size()[2] - x1.size()[2]
+        diffX = x2.size()[3] - x1.size()[3]
+
+        x1 = F.pad(x1, [diffX // 2, diffX - diffX // 2,
+                        diffY // 2, diffY - diffY // 2])
+        x = torch.cat([x2, x1], dim=1)
+        return self.conv(x)
+
+class UNet(nn.Module):
+    def __init__(self, n_channels, n_classes):
+        super(UNet, self).__init__()
+        self.n_channels = n_channels
+        self.n_classes = n_classes
+
+        self.inc = TripleConv(n_channels, 64)
+        self.down1 = Down(64, 128)
+        self.down2 = Down(128, 256)
+        self.down3 = Down(256, 512)
+        self.up1 = Up(512, 256)
+        self.up2 = Up(256, 128)
+        self.up3 = Up(128, 64)
+        self.outc = nn.Conv2d(64, n_classes, kernel_size=1)
+
+    def forward(self, x):
+        x1 = self.inc(x)
+        x2 = self.down1(x1)
+        x3 = self.down2(x2)
+        x4 = self.down3(x3)
+        x = self.up1(x4, x3)
+        x = self.up2(x, x2)
+        x = self.up3(x, x1)
+        logits = self.outc(x)
+        return logits
+    
+model = UNet()
+model.cuda()
+criterion = nn.MSELoss()
+optimizer = optim.Adam(model.parameters(), lr=0.0001)
+scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=20)
+last_test_loss = np.inf
+
+#%%
+
+######################################
+############# TRAIN LOOP #############
+######################################
+
+num_epochs = 100
+
+for epoch in range(num_epochs):
+    model.train()
+    total_loss = 0
+    num_batches = len(train_loader)
+    for batch, target, scalar in train_loader: 
+
+        
+        optimizer.zero_grad()
+
+        scalar = scalar.view(scalar.size(0),1)
+        batch, scalar, target = batch.cuda(), scalar.cuda(), target.cuda()
+
+        # Forward pass
+        outputs = model.forward(batch, scalar)
+        outputs = outputs.view(outputs.size(0),13,13)
+
+        #Añadir criterios de fallo
+        T_interfaces = torch.zeros((target.size(0), 2, 2))
+        T_interfaces[:,0,0], T_interfaces[:,0,1], T_interfaces[:,1,0], T_interfaces[:,1,1] = target[:,0,0], target[:,0,12], target[:,12,0], target[:,12,12]
+
+        outputs_interfaces = torch.zeros((outputs.size(0),2,2))
+        outputs_interfaces[:,0,0], outputs_interfaces[:,0,1], outputs_interfaces[:,1,0], outputs_interfaces[:,1,1] = outputs[:,0,0], outputs[:,0,12], outputs[:,12,0], outputs[:,12,12]
+
+        loss = (2*criterion(outputs, target) + criterion(outputs_interfaces,T_interfaces))/3.
+        
+        # Backward pass and optimize
+        loss.backward()
+        optimizer.step()
+        total_loss += loss.item()
+
+    avg_loss = total_loss/num_batches
+
+
+    scheduler.step(avg_loss)
+
+
+    last_lr = scheduler.optimizer.param_groups[0]['lr']
+
+    total_loss = 0.0
+    total_batches = 0
+
+    with torch.no_grad(): 
+        for batch, target, scalar in test_loader:
+
+            # Prepare the data and target
+            scalar = scalar.view(scalar.size(0), 1)
+            batch, scalar, target = batch.cuda(), scalar.cuda(), target.cuda()
+
+            # Forward pass
+            outputs = model(batch, scalar)
+            outputs = outputs.view(outputs.size(0),13,13)
+
+            #Añadir criterios de fallo
+            T_interfaces = torch.zeros((target.size(0), 2, 2))
+            T_interfaces[:,0,0], T_interfaces[:,0,1], T_interfaces[:,1,0], T_interfaces[:,1,1] = target[:,0,0], target[:,0,12], target[:,12,0], target[:,12,12]
+
+            outputs_interfaces = torch.zeros((outputs.size(0),2,2))
+            outputs_interfaces[:,0,0], outputs_interfaces[:,0,1], outputs_interfaces[:,1,0], outputs_interfaces[:,1,1] = outputs[:,0,0], outputs[:,0,12], outputs[:,12,0], outputs[:,12,12]
+
+            loss = (2*criterion(outputs, target) + criterion(outputs_interfaces,T_interfaces))/3.
+
+            # Accumulate the loss
+            total_loss += loss.item()
+            total_batches += 1
+
+    # Compute the average loss over all batches
+    avg_test_loss = total_loss / total_batches
+
+    print(f"Epoch [{epoch+1}/{num_epochs}], Loss: {avg_loss:.8f}, Current LR: {last_lr}")
+    if avg_test_loss < last_test_loss:
+        print("{:.8f} -----> {:.8f}   Saving...".format(last_test_loss,avg_test_loss))
+        torch.save(model.state_dict(), 'modelos\modelo_varpos_unet.pth')
+        last_test_loss = avg_test_loss
+
+# %%
+######################################
+############# LOAD MODEL #############
+######################################
+
+model.load_state_dict(torch.load('modelos\modelo_varpos_unet.pth'))
+model.eval()
+
+# Variables to track losses and the number of batches
+total_loss = 0.0
+total_batches = 0
+
+with torch.no_grad(): 
+    for batch, target, scalar in test_loader:
+
+        # Prepare the data and target
+        scalar = scalar.view(scalar.size(0), 1)
+        batch, scalar, target = batch.cuda(), scalar.cuda(), target.cuda()
+
+        # Forward pass
+        outputs = model(batch, scalar)
+        outputs = outputs.view(outputs.size(0),13,13)
+
+        #Añadir criterios de fallo
+        T_interfaces = torch.zeros((target.size(0), 2, 2))
+        T_interfaces[:,0,0], T_interfaces[:,0,1], T_interfaces[:,1,0], T_interfaces[:,1,1] = target[:,0,0], target[:,0,12], target[:,12,0], target[:,12,12]
+
+        outputs_interfaces = torch.zeros((outputs.size(0),2,2))
+        outputs_interfaces[:,0,0], outputs_interfaces[:,0,1], outputs_interfaces[:,1,0], outputs_interfaces[:,1,1] = outputs[:,0,0], outputs[:,0,12], outputs[:,12,0], outputs[:,12,12]
+
+        loss = (criterion(outputs, target) + criterion(outputs_interfaces,T_interfaces))/2.
+
+        # Accumulate the loss
+        total_loss += loss.item()
+        total_batches += 1
+
+# Compute the average loss over all batches
+avg_test_loss = total_loss / total_batches
+print(f'Test Loss: {avg_test_loss:.6f}')
+last_test_loss = avg_test_loss
+
+#%%
+#####################################
+############# TEST LOOP #############
+#####################################
+
+    # Ensure the model is in evaluation mode
+model.eval()
+
+# Variables to track losses and the number of batches
+total_loss = 0.0
+total_batches = 0
+
+with torch.no_grad(): 
+    for batch, target, scalar in test_loader:
+
+        # Prepare the data and target
+        scalar = scalar.view(scalar.size(0), 1)
+        batch, scalar, target = batch.cuda(), scalar.cuda(), target.cuda()
+
+        # Forward pass
+        outputs = model(batch, scalar)
+        outputs = outputs.view(outputs.size(0),13,13)
+
+        #Añadir criterios de fallo
+        T_interfaces = torch.zeros((target.size(0), 2, 2))
+        T_interfaces[:,0,0], T_interfaces[:,0,1], T_interfaces[:,1,0], T_interfaces[:,1,1] = target[:,0,0], target[:,0,12], target[:,12,0], target[:,12,12]
+
+        outputs_interfaces = torch.zeros((outputs.size(0),2,2))
+        outputs_interfaces[:,0,0], outputs_interfaces[:,0,1], outputs_interfaces[:,1,0], outputs_interfaces[:,1,1] = outputs[:,0,0], outputs[:,0,12], outputs[:,12,0], outputs[:,12,12]
+
+        loss = (2*criterion(outputs, target) + criterion(outputs_interfaces,T_interfaces))/3.
+
+        # Accumulate the loss
+        total_loss += loss.item()
+        total_batches += 1
+
+# Compute the average loss over all batches
+avg_test_loss = total_loss / total_batches
+print(f'Test Loss: {avg_test_loss:.6f}')
+
+
+# %%
+import matplotlib.pyplot as plt
+
+model.eval()
+# Función para visualizar el output de la red y el target
+def visualizar_valores_pixeles(output, target):
+    # Convertir los tensores a numpy y asegurarse de que están en CPU
+    output_np = output.squeeze().cpu().detach().numpy()
+    target_np = target.squeeze().cpu().detach().numpy()
+    
+    fig, axs = plt.subplots(1, 2, figsize=(10, 5))
+    
+    # Asegurarse de que las celdas de la grilla sean lo suficientemente grandes para el texto
+    fig.tight_layout(pad=3.0)
+    
+    # Output de la red
+    axs[1].imshow(output_np, cmap='viridis', interpolation='nearest')
+    axs[1].title.set_text('Output de la Red')
+    for i in range(output_np.shape[0]):
+        for j in range(output_np.shape[1]):
+            text = axs[0].text(j, i, f'{output_np[i, j]:.0f}',
+                               ha="center", va="center", color="w", fontsize=6)
+
+    # Target
+    axs[0].imshow(target_np, cmap='viridis', interpolation='nearest')
+    axs[0].title.set_text('Target')
+    for i in range(target_np.shape[0]):
+        for j in range(target_np.shape[1]):
+            text = axs[1].text(j, i, f'{target_np[i, j]:.0f}',
+                               ha="center", va="center", color="w", fontsize=6)
+
+    plt.show()
+
+count = 0 
+with torch.no_grad(): 
+    for batch, target, scalar in test_loader:
+
+        # Prepare the data and target
+        scalar = scalar.view(scalar.size(0), 1)
+        batch, scalar, target = batch.cuda(), scalar.cuda(), target.cuda()
+
+        # Forward pass
+        outputs = model(batch, scalar)
+        outputs = scaler_output.inverse_transform(outputs)
+        target = scaler_output.inverse_transform(target)
+        for i in range(5):
+            visualizar_valores_pixeles(outputs[i], target[i])
+            count += 1
+        if count>= 5: break
+        
+
+
+
+# %%

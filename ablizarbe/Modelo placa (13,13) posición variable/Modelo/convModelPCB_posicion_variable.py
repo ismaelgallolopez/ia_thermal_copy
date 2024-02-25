@@ -244,7 +244,7 @@ last_test_loss = np.inf
 ############# TRAIN LOOP #############
 ######################################
 
-num_epochs = 100
+num_epochs = 50
 
 for epoch in range(num_epochs):
     model.train()
@@ -317,7 +317,7 @@ for epoch in range(num_epochs):
     print(f"Epoch [{epoch+1}/{num_epochs}], Loss: {avg_loss:.8f}, Current LR: {last_lr}")
     if avg_test_loss < last_test_loss:
         print("{:.8f} -----> {:.8f}   Saving...".format(last_test_loss,avg_test_loss))
-        torch.save(model.state_dict(), 'modelos\modelo_varpos.pth')
+        torch.save(model.state_dict(), 'modelos\modelo_varpos_cambio.pth')
         last_test_loss = avg_test_loss
 
 # %%

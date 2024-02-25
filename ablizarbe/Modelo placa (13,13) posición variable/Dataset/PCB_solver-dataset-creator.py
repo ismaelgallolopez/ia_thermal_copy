@@ -278,7 +278,7 @@ TenvAleatorias = np.random.uniform(250, 350, n_entradas)
 
 posicionesAleatorias = []
 for _ in range(n_entradas):
-    coords = np.random.randint(0, 11, (4, 2))
+    coords = np.random.randint(1, 12, (4, 2))
     lista_tuplas = [tuple(coord) for coord in coords]
     posicionesAleatorias.append(lista_tuplas)
 posicionesAleatorias = np.array(posicionesAleatorias)
