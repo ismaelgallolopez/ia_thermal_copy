@@ -593,7 +593,12 @@ with torch.no_grad():
         latentvector = mlp(input)
         general_decoded = general_decoder(latentvector)
         residual_decoded = residual_decoder(general_decoded)
-        
+
+
+        residual_decoded = scaler_output.inverse_transform(residual_decoded)
+        target = scaler_output.inverse_transform(target)
+
+
         # Calcular la pérdida
         loss = criterionReconstruction(residual_decoded, target)
         total_loss += loss.item()
@@ -601,7 +606,7 @@ with torch.no_grad():
     # Calcular la pérdida promedio
     avg_test_loss = total_loss / len(test_loader)
 
-print("Test Loss: {:.8f}".format(avg_test_loss))
+print("Test Loss: {:.8f} grados".format(avg_test_loss))
 
 #%%
 ##############################################
