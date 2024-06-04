@@ -12,6 +12,21 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
+def rotate_and_expand_dataset(inputs, scalars, targets):
+    expanded_inputs = inputs.clone()
+    expanded_scalars = scalars.clone()
+    expanded_targets = targets.clone()
+
+    for k in range(1, 4):  # Rotate 90, 180, 270 degrees
+        rotated_inputs = torch.rot90(inputs, k, dims=[2, 3])
+        rotated_targets = torch.rot90(targets, k, dims=[1, 2])
+
+        expanded_inputs = torch.cat((expanded_inputs, rotated_inputs), dim=0)
+        expanded_scalars = torch.cat((expanded_scalars, scalars), dim=0) 
+        expanded_targets = torch.cat((expanded_targets, rotated_targets), dim=0)
+
+    return expanded_inputs, expanded_scalars, expanded_targets
+
 class PCBDataset(Dataset):
     def __init__(self, inputs_dataset, outputs_dataset, scalar_dataset):
 
@@ -199,7 +214,6 @@ class LaEnergiaNoAparece(nn.Module):
 
         return torch.mean(torch.abs(excessEnergy))
 
-
 #%%
 ##############################################
 ############# CARGANDO LOS DATOS #############
@@ -216,31 +230,23 @@ scaled_input = scaler_input.fit_transform(dataset.inputs_dataset)
 scaled_scalar = scaler_scalar.fit_transform(dataset.scalar_dataset)
 scaled_output = scaler_output.fit_transform(dataset.outputs_dataset)
 
+# Crear el dataset
 dataset = PCBDataset(scaled_input, scaled_output, scaled_scalar)
 
+
 # Separando Train and Test
-train_cases = 160
-test_cases = 1000
+train_cases = 20
+test_cases = 100
+
 
 batch_size = 64
 test_size = 0.1
-
-#CAMBIAR A GUSTO
-#num_train = test_cases + train_cases 
-#split = int(np.floor(test_cases))
-
-num_train = int(len(dataset)) 
-split = int(np.floor(test_size * num_train))
-
-
+num_train = test_cases + train_cases #int(len(dataset))
 indices = list(range(num_train))
 
-#SOLO ACTIVAR PARA ESTUDIOS
-#torch.manual_seed(42) 
-#torch.cuda.manual_seed(42)
-#np.random.seed(42)
-
+np.random.seed(42)
 np.random.shuffle(indices)
+split = int(np.floor(test_cases))
 train_idx, test_idx = indices[split:], indices[:split]
 
 train_sampler = SubsetRandomSampler(train_idx)
@@ -249,6 +255,32 @@ test_sampler = SubsetRandomSampler(test_idx)
 #Creando los Datalaoders
 train_loader = DataLoader(dataset, batch_size=batch_size, sampler=train_sampler)
 test_loader = DataLoader(dataset, batch_size=batch_size, sampler=test_sampler)
+
+
+all_inputs = []
+all_scalars = []
+all_targets = []
+
+for inputs, targets, scalars in train_loader:
+    all_inputs.append(inputs)
+    all_scalars.append(scalars)
+    all_targets.append(targets)
+
+# Concatenate all data into single tensors
+all_inputs = torch.cat(all_inputs, dim=0)
+all_scalars = torch.cat(all_scalars, dim=0)
+all_targets = torch.cat(all_targets, dim=0)
+
+
+expanded_inputs, expanded_scalars, expanded_targets = rotate_and_expand_dataset(all_inputs, all_scalars, all_targets)
+
+# Create a new dataset with the expanded data
+dataset = PCBDataset(expanded_inputs,expanded_targets, expanded_scalars)
+
+
+train_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+
+
 
 
 
@@ -386,7 +418,7 @@ model.cuda()
 criterion = nn.MSELoss()
 criterionPhysics = LaEnergiaNoAparece()
 optimizer = optim.Adam(model.parameters(), lr=0.0001)
-scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=15)
+scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=30)
 last_test_loss = np.inf
 
 #%%
@@ -395,15 +427,14 @@ last_test_loss = np.inf
 ############# TRAIN LOOP #############
 ######################################
 
-num_epochs = 50
+num_epochs = 200
+
 
 for epoch in range(num_epochs):
     model.train()
     total_loss = 0
     num_batches = len(train_loader)
     for batch, target, scalar in train_loader: 
-
-        
         optimizer.zero_grad()
 
         scalar = scalar.view(scalar.size(0),1)
@@ -425,10 +456,10 @@ for epoch in range(num_epochs):
         outputs_p = scaler_output.inverse_transform(outputs)
         scalar_p = scaler_scalar.inverse_transform(scalar)
 
-
         #loss = 2*criterion(outputs, target) +  criterion(outputs_interfaces,T_interfaces) + 2*criterionPhysics(outputs_p.view(outputs.size(0),13,13),batch_p[:,0,:,:].view(batch.size(0),13,13),batch_p[:,1,:,:].view(batch.size(0),13,13),scalar_p.view(batch.size(0),1))
-        loss = (2*criterion(outputs, target) + criterion(outputs_interfaces,T_interfaces))/3.
-        
+        loss = 2*criterion(outputs, target) + criterion(outputs_interfaces,T_interfaces)
+        #loss = criterion(outputs_interfaces,T_interfaces)
+
         # Backward pass and optimize
         loss.backward()
         optimizer.step()
@@ -469,7 +500,7 @@ for epoch in range(num_epochs):
     print(f"Epoch [{epoch+1}/{num_epochs}], Loss: {avg_loss:.8f}, Current LR: {last_lr}")
     if avg_test_loss < last_test_loss:
         print("{:.8f} -----> {:.8f}   Saving...".format(last_test_loss,avg_test_loss))
-        torch.save(model.state_dict(), 'modelos\modelo_varpos_bueno.pth')
+        torch.save(model.state_dict(), 'modelos\modelo_PI_sin.pth')
         last_test_loss = avg_test_loss
 
 # %%
@@ -477,7 +508,7 @@ for epoch in range(num_epochs):
 ############# LOAD MODEL #############
 ######################################
 
-model.load_state_dict(torch.load('modelos\modelo_varpos_bueno.pth'))
+model.load_state_dict(torch.load('modelos\modelo_PI_sin.pth'))
 model.eval()
 
 # Variables to track losses and the number of batches
@@ -495,14 +526,7 @@ with torch.no_grad():
         outputs = model(batch, scalar)
         outputs = outputs.view(outputs.size(0),13,13)
 
-        #Añadir criterios de fallo
-        T_interfaces = torch.zeros((target.size(0), 2, 2))
-        T_interfaces[:,0,0], T_interfaces[:,0,1], T_interfaces[:,1,0], T_interfaces[:,1,1] = target[:,0,0], target[:,0,12], target[:,12,0], target[:,12,12]
-
-        outputs_interfaces = torch.zeros((outputs.size(0),2,2))
-        outputs_interfaces[:,0,0], outputs_interfaces[:,0,1], outputs_interfaces[:,1,0], outputs_interfaces[:,1,1] = outputs[:,0,0], outputs[:,0,12], outputs[:,12,0], outputs[:,12,12]
-
-        loss = (2*criterion(outputs, target) + criterion(outputs_interfaces,T_interfaces))/3.
+        loss = criterion(outputs, target)
 
         # Accumulate the loss
         total_loss += loss.item()
@@ -520,7 +544,7 @@ print(f"Total number of parameters: {total_params}")
 ############# TEST LOOP #############
 #####################################
 
-    # Ensure the model is in evaluation mode
+# Ensure the model is in evaluation mode
 model.eval()
 
 # Variables to track losses and the number of batches
@@ -537,13 +561,6 @@ with torch.no_grad():
         # Forward pass
         outputs = model(batch, scalar)
         outputs = outputs.view(outputs.size(0),13,13)
-
-        #Añadir criterios de fallo
-        T_interfaces = torch.zeros((target.size(0), 2, 2))
-        T_interfaces[:,0,0], T_interfaces[:,0,1], T_interfaces[:,1,0], T_interfaces[:,1,1] = target[:,0,0], target[:,0,12], target[:,12,0], target[:,12,12]
-
-        outputs_interfaces = torch.zeros((outputs.size(0),2,2))
-        outputs_interfaces[:,0,0], outputs_interfaces[:,0,1], outputs_interfaces[:,1,0], outputs_interfaces[:,1,1] = outputs[:,0,0], outputs[:,0,12], outputs[:,12,0], outputs[:,12,12]
 
         loss = criterion(outputs, target)
 
@@ -580,7 +597,7 @@ def visualizar_valores_pixeles(output, target):
     axs[1].title.set_text('Output de la Red')
     for i in range(output_np.shape[0]):
         for j in range(output_np.shape[1]):
-            text = axs[1].text(j, i, f'{output_np[i, j]:.1f}',
+            text = axs[1].text(j, i, f'{output_np[i, j]:.0f}',
                                ha="center", va="center", color="w", fontsize=6)
 
     # Target
@@ -588,7 +605,7 @@ def visualizar_valores_pixeles(output, target):
     axs[0].title.set_text('Target')
     for i in range(target_np.shape[0]):
         for j in range(target_np.shape[1]):
-            text = axs[0].text(j, i, f'{target_np[i, j]:.1f}',
+            text = axs[0].text(j, i, f'{target_np[i, j]:.0f}',
                                ha="center", va="center", color="w", fontsize=6)
 
     plt.show()
@@ -605,7 +622,6 @@ with torch.no_grad():
         outputs = model(batch, scalar)
         outputs = scaler_output.inverse_transform(outputs)
         target = scaler_output.inverse_transform(target)
-        print(batch.size())
         for i in range(5):
             visualizar_valores_pixeles(outputs[i], target[i])
             count += 1

@@ -1,6 +1,8 @@
 #%%
 import torch
+import time 
 import numpy as np
+from scipy import sparse
 
 #Pytorch dataset
 from torch.utils.data import Dataset, DataLoader
@@ -199,7 +201,6 @@ class LaEnergiaNoAparece(nn.Module):
 
         return torch.mean(torch.abs(excessEnergy))
 
-
 #%%
 ##############################################
 ############# CARGANDO LOS DATOS #############
@@ -219,26 +220,28 @@ scaled_output = scaler_output.fit_transform(dataset.outputs_dataset)
 dataset = PCBDataset(scaled_input, scaled_output, scaled_scalar)
 
 # Separando Train and Test
-train_cases = 160
+train_cases = 60
 test_cases = 1000
 
-batch_size = 64
+batch_size = 4
 test_size = 0.1
 
 #CAMBIAR A GUSTO
-#num_train = test_cases + train_cases 
-#split = int(np.floor(test_cases))
+num_train = test_cases + train_cases 
+split = int(np.floor(test_cases))
 
-num_train = int(len(dataset)) 
-split = int(np.floor(test_size * num_train))
+#num_train = int(len(dataset)) 
+#split = int(np.floor(test_size * num_train))
 
 
 indices = list(range(num_train))
 
 #SOLO ACTIVAR PARA ESTUDIOS
-#torch.manual_seed(42) 
-#torch.cuda.manual_seed(42)
-#np.random.seed(42)
+seed = 50
+torch.manual_seed(seed) 
+torch.cuda.manual_seed(seed)
+np.random.seed(seed)
+
 
 np.random.shuffle(indices)
 train_idx, test_idx = indices[split:], indices[:split]
@@ -338,10 +341,10 @@ class UNet(nn.Module):
         self.fc_scalar = nn.Linear(1, 32)
 
         #MLP
-        self.fc1 = nn.Linear(2 * 2 * 512 + 32, 2080)
-        self.fc2 = nn.Linear(2080,2048)
+        self.fc1 = nn.Linear(2 * 2 * 512 + 32, 2048)
+        self.fc2 = nn.Linear(2048,2048)
         self.fc3 = nn.Linear(2048,2048)
-        self.fc4 = nn.Linear(2048,2048)
+        self.fc4 = nn.Linear(2048,2 * 2 * 512)
 
         #Decoder
         self.up1 = Up(512, 256)
@@ -391,19 +394,22 @@ last_test_loss = np.inf
 
 #%%
 
-######################################
-############# TRAIN LOOP #############
-######################################
+################################################
+############# TRAIN LOOP BOUNDRIES #############
+################################################
 
-num_epochs = 50
+num_epochs = 200
+
+model.dropout.p = 0.99
+
+start_time = time.time()
+
 
 for epoch in range(num_epochs):
     model.train()
     total_loss = 0
     num_batches = len(train_loader)
     for batch, target, scalar in train_loader: 
-
-        
         optimizer.zero_grad()
 
         scalar = scalar.view(scalar.size(0),1)
@@ -420,15 +426,16 @@ for epoch in range(num_epochs):
         outputs_interfaces = torch.zeros((outputs.size(0),2,2))
         outputs_interfaces[:,0,0], outputs_interfaces[:,0,1], outputs_interfaces[:,1,0], outputs_interfaces[:,1,1] = outputs[:,0,0], outputs[:,0,12], outputs[:,12,0], outputs[:,12,12]
 
-        #Desestandarizar para la física
-        batch_p = scaler_input.inverse_transform(batch)
-        outputs_p = scaler_output.inverse_transform(outputs)
-        scalar_p = scaler_scalar.inverse_transform(scalar)
+        #T_componentes = torch.zeros((target.size(0),2,2))
+        #T_componentes[:,0,0], T_componentes[:,0,1], T_componentes[:,1,0], T_componentes[:,1,1] = target[:,3,6], target[:,6,3], target[:,9,3], target[:,9,9]
+
+        #outputs_componentes = torch.zeros((outputs.size(0),2,2))
+        #outputs_componentes[:,0,0], outputs_componentes[:,0,1], outputs_componentes[:,1,0], outputs_componentes[:,1,1] = outputs[:,3,6], outputs[:,6,3], outputs[:,9,3], target[:,9,9]
 
 
-        #loss = 2*criterion(outputs, target) +  criterion(outputs_interfaces,T_interfaces) + 2*criterionPhysics(outputs_p.view(outputs.size(0),13,13),batch_p[:,0,:,:].view(batch.size(0),13,13),batch_p[:,1,:,:].view(batch.size(0),13,13),scalar_p.view(batch.size(0),1))
-        loss = (2*criterion(outputs, target) + criterion(outputs_interfaces,T_interfaces))/3.
-        
+
+        loss = criterion(outputs_interfaces,T_interfaces)
+
         # Backward pass and optimize
         loss.backward()
         optimizer.step()
@@ -454,9 +461,137 @@ for epoch in range(num_epochs):
             batch, scalar, target = batch.cuda(), scalar.cuda(), target.cuda()
 
             # Forward pass
+
             outputs = model(batch, scalar)
             outputs = outputs.view(outputs.size(0),13,13)
 
+            T_interfaces = torch.zeros((target.size(0), 2, 2))
+            T_interfaces[:,0,0], T_interfaces[:,0,1], T_interfaces[:,1,0], T_interfaces[:,1,1] = target[:,0,0], target[:,0,12], target[:,12,0], target[:,12,12]
+
+            outputs_interfaces = torch.zeros((outputs.size(0),2,2))
+            outputs_interfaces[:,0,0], outputs_interfaces[:,0,1], outputs_interfaces[:,1,0], outputs_interfaces[:,1,1] = outputs[:,0,0], outputs[:,0,12], outputs[:,12,0], outputs[:,12,12]
+            
+            #T_componentes = torch.zeros((target.size(0),2,2))
+            #T_componentes[:,0,0], T_componentes[:,0,1], T_componentes[:,1,0], T_componentes[:,1,1] = target[:,3,6], target[:,6,3], target[:,9,3], target[:,9,9]
+
+            #outputs_componentes = torch.zeros((outputs.size(0),2,2))
+            #outputs_componentes[:,0,0], outputs_componentes[:,0,1], outputs_componentes[:,1,0], outputs_componentes[:,1,1] = outputs[:,3,6], outputs[:,6,3], outputs[:,9,3], target[:,9,9]
+
+
+            loss = criterion(outputs_interfaces,T_interfaces)
+
+            # Accumulate the loss
+            total_loss += loss.item()
+            total_batches += 1
+
+    # Compute the average loss over all batches
+    avg_test_loss = total_loss / total_batches
+
+    print(f"Epoch [{epoch+1}/{num_epochs}], Loss: {avg_loss:.8f}, Current LR: {last_lr}")
+    if avg_test_loss < last_test_loss:
+        print("{:.8f} -----> {:.8f}   Saving...".format(last_test_loss,avg_test_loss))
+        torch.save(model.state_dict(), 'modelos\modelo_PI.pth')
+        last_test_loss = avg_test_loss
+
+end_time = time.time() 
+total_time_1 = end_time - start_time 
+
+minutes, seconds = divmod(total_time_1, 60)
+print(f"Total training time: {int(minutes)} minutes and {int(seconds)} seconds")
+
+
+
+# %%
+
+###############################################
+############# AJUSTES INTERMEDIOS #############
+###############################################
+
+model.load_state_dict(torch.load('modelos\modelo_PI.pth'))
+optimizer = optim.Adam(model.parameters(), lr=0.0001)
+scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=15)
+last_test_loss = np.inf
+
+model.dropout.p = 0
+
+#%%
+
+############################################
+############# TRAIN LOOP TOTAL #############
+############################################
+
+num_epochs = 200
+
+start_time = time.time()
+
+
+for epoch in range(num_epochs):
+    model.train()
+    total_loss = 0
+    num_batches = len(train_loader)
+    for batch, target, scalar in train_loader: 
+        optimizer.zero_grad()
+
+        scalar = scalar.view(scalar.size(0),1)
+        batch, scalar, target = batch.cuda(), scalar.cuda(), target.cuda()
+
+        # Forward pass
+        outputs = model.forward(batch, scalar)
+        outputs = outputs.view(outputs.size(0),13,13)
+
+        #Añadir criterios de fallo
+        T_interfaces = torch.zeros((target.size(0), 2, 2))
+        T_interfaces[:,0,0], T_interfaces[:,0,1], T_interfaces[:,1,0], T_interfaces[:,1,1] = target[:,0,0], target[:,0,12], target[:,12,0], target[:,12,12]
+
+        outputs_interfaces = torch.zeros((outputs.size(0),2,2))
+        outputs_interfaces[:,0,0], outputs_interfaces[:,0,1], outputs_interfaces[:,1,0], outputs_interfaces[:,1,1] = outputs[:,0,0], outputs[:,0,12], outputs[:,12,0], outputs[:,12,12]
+        
+        #T_componentes = torch.zeros((target.size(0),2,2))
+        #T_componentes[:,0,0], T_componentes[:,0,1], T_componentes[:,1,0], T_componentes[:,1,1] = target[:,3,6], target[:,6,3], target[:,9,3], target[:,9,9]
+
+        #outputs_componentes = torch.zeros((outputs.size(0),2,2))
+        #outputs_componentes[:,0,0], outputs_componentes[:,0,1], outputs_componentes[:,1,0], outputs_componentes[:,1,1] = outputs[:,3,6], outputs[:,6,3], outputs[:,9,3], target[:,9,9]
+
+
+        
+        #Desestandarizar para la física
+        batch_p = scaler_input.inverse_transform(batch)
+        outputs_p = scaler_output.inverse_transform(outputs)
+        scalar_p = scaler_scalar.inverse_transform(scalar)
+
+        loss = 2*criterion(outputs, target) +  criterion(outputs_interfaces,T_interfaces)  + 2*criterionPhysics(outputs_p.view(outputs.size(0),13,13),batch_p[:,0,:,:].view(batch.size(0),13,13),batch_p[:,1,:,:].view(batch.size(0),13,13),scalar_p.view(batch.size(0),1))
+        #loss = 2*criterion(outputs, target) + criterion(outputs_interfaces,T_interfaces)
+
+
+        # Backward pass and optimize
+        loss.backward()
+        optimizer.step()
+        total_loss += loss.item()
+
+    avg_loss = total_loss/num_batches
+
+
+    scheduler.step(avg_loss)
+
+
+    last_lr = scheduler.optimizer.param_groups[0]['lr']
+
+    total_loss = 0.0
+    total_batches = 0
+
+    model.eval()
+    with torch.no_grad(): 
+        for batch, target, scalar in test_loader:
+
+            # Prepare the data and target
+            scalar = scalar.view(scalar.size(0), 1)
+            batch, scalar, target = batch.cuda(), scalar.cuda(), target.cuda()
+
+            # Forward pass
+
+            outputs = model(batch, scalar)
+            outputs = outputs.view(outputs.size(0),13,13)
+            
             loss = criterion(outputs, target)
 
             # Accumulate the loss
@@ -469,15 +604,23 @@ for epoch in range(num_epochs):
     print(f"Epoch [{epoch+1}/{num_epochs}], Loss: {avg_loss:.8f}, Current LR: {last_lr}")
     if avg_test_loss < last_test_loss:
         print("{:.8f} -----> {:.8f}   Saving...".format(last_test_loss,avg_test_loss))
-        torch.save(model.state_dict(), 'modelos\modelo_varpos_bueno.pth')
+        torch.save(model.state_dict(), 'modelos\modelo_PI.pth')
         last_test_loss = avg_test_loss
+
+
+end_time = time.time() 
+total_time = end_time - start_time 
+total_time += total_time_1
+
+minutes, seconds = divmod(total_time, 60)
+print(f"Total training time: {int(minutes)} minutes and {int(seconds)} seconds") 
 
 # %%
 ######################################
 ############# LOAD MODEL #############
 ######################################
 
-model.load_state_dict(torch.load('modelos\modelo_varpos_bueno.pth'))
+model.load_state_dict(torch.load('modelos\modelo_PI.pth'))
 model.eval()
 
 # Variables to track losses and the number of batches
@@ -495,14 +638,7 @@ with torch.no_grad():
         outputs = model(batch, scalar)
         outputs = outputs.view(outputs.size(0),13,13)
 
-        #Añadir criterios de fallo
-        T_interfaces = torch.zeros((target.size(0), 2, 2))
-        T_interfaces[:,0,0], T_interfaces[:,0,1], T_interfaces[:,1,0], T_interfaces[:,1,1] = target[:,0,0], target[:,0,12], target[:,12,0], target[:,12,12]
-
-        outputs_interfaces = torch.zeros((outputs.size(0),2,2))
-        outputs_interfaces[:,0,0], outputs_interfaces[:,0,1], outputs_interfaces[:,1,0], outputs_interfaces[:,1,1] = outputs[:,0,0], outputs[:,0,12], outputs[:,12,0], outputs[:,12,12]
-
-        loss = (2*criterion(outputs, target) + criterion(outputs_interfaces,T_interfaces))/3.
+        loss = criterion(outputs, target)
 
         # Accumulate the loss
         total_loss += loss.item()
@@ -520,7 +656,7 @@ print(f"Total number of parameters: {total_params}")
 ############# TEST LOOP #############
 #####################################
 
-    # Ensure the model is in evaluation mode
+# Ensure the model is in evaluation mode
 model.eval()
 
 # Variables to track losses and the number of batches
@@ -537,13 +673,6 @@ with torch.no_grad():
         # Forward pass
         outputs = model(batch, scalar)
         outputs = outputs.view(outputs.size(0),13,13)
-
-        #Añadir criterios de fallo
-        T_interfaces = torch.zeros((target.size(0), 2, 2))
-        T_interfaces[:,0,0], T_interfaces[:,0,1], T_interfaces[:,1,0], T_interfaces[:,1,1] = target[:,0,0], target[:,0,12], target[:,12,0], target[:,12,12]
-
-        outputs_interfaces = torch.zeros((outputs.size(0),2,2))
-        outputs_interfaces[:,0,0], outputs_interfaces[:,0,1], outputs_interfaces[:,1,0], outputs_interfaces[:,1,1] = outputs[:,0,0], outputs[:,0,12], outputs[:,12,0], outputs[:,12,12]
 
         loss = criterion(outputs, target)
 
@@ -580,7 +709,7 @@ def visualizar_valores_pixeles(output, target):
     axs[1].title.set_text('Output de la Red')
     for i in range(output_np.shape[0]):
         for j in range(output_np.shape[1]):
-            text = axs[1].text(j, i, f'{output_np[i, j]:.1f}',
+            text = axs[1].text(j, i, f'{output_np[i, j]:.0f}',
                                ha="center", va="center", color="w", fontsize=6)
 
     # Target
@@ -588,7 +717,7 @@ def visualizar_valores_pixeles(output, target):
     axs[0].title.set_text('Target')
     for i in range(target_np.shape[0]):
         for j in range(target_np.shape[1]):
-            text = axs[0].text(j, i, f'{target_np[i, j]:.1f}',
+            text = axs[0].text(j, i, f'{target_np[i, j]:.0f}',
                                ha="center", va="center", color="w", fontsize=6)
 
     plt.show()
@@ -603,9 +732,10 @@ with torch.no_grad():
 
         # Forward pass
         outputs = model(batch, scalar)
+        
+
         outputs = scaler_output.inverse_transform(outputs)
         target = scaler_output.inverse_transform(target)
-        print(batch.size())
         for i in range(5):
             visualizar_valores_pixeles(outputs[i], target[i])
             count += 1

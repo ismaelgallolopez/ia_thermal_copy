@@ -298,14 +298,7 @@ for epoch in range(num_epochs):
             outputs = model(batch, scalar)
             outputs = outputs.view(outputs.size(0),13,13)
 
-            #Añadir criterios de fallo
-            T_interfaces = torch.zeros((target.size(0), 2, 2))
-            T_interfaces[:,0,0], T_interfaces[:,0,1], T_interfaces[:,1,0], T_interfaces[:,1,1] = target[:,0,0], target[:,0,12], target[:,12,0], target[:,12,12]
-
-            outputs_interfaces = torch.zeros((outputs.size(0),2,2))
-            outputs_interfaces[:,0,0], outputs_interfaces[:,0,1], outputs_interfaces[:,1,0], outputs_interfaces[:,1,1] = outputs[:,0,0], outputs[:,0,12], outputs[:,12,0], outputs[:,12,12]
-
-            loss = (2*criterion(outputs, target) + criterion(outputs_interfaces,T_interfaces))/3.
+            loss = criterion(outputs, target)
 
             # Accumulate the loss
             total_loss += loss.item()
@@ -325,7 +318,7 @@ for epoch in range(num_epochs):
 ############# LOAD MODEL #############
 ######################################
 
-model.load_state_dict(torch.load('modelos\modelo_varpos.pth'))
+model.load_state_dict(torch.load('modelos\modelo_varpos_cambio.pth'))
 model.eval()
 
 # Variables to track losses and the number of batches
@@ -343,14 +336,8 @@ with torch.no_grad():
         outputs = model(batch, scalar)
         outputs = outputs.view(outputs.size(0),13,13)
 
-        #Añadir criterios de fallo
-        T_interfaces = torch.zeros((target.size(0), 2, 2))
-        T_interfaces[:,0,0], T_interfaces[:,0,1], T_interfaces[:,1,0], T_interfaces[:,1,1] = target[:,0,0], target[:,0,12], target[:,12,0], target[:,12,12]
 
-        outputs_interfaces = torch.zeros((outputs.size(0),2,2))
-        outputs_interfaces[:,0,0], outputs_interfaces[:,0,1], outputs_interfaces[:,1,0], outputs_interfaces[:,1,1] = outputs[:,0,0], outputs[:,0,12], outputs[:,12,0], outputs[:,12,12]
-
-        loss = (criterion(outputs, target) + criterion(outputs_interfaces,T_interfaces))/2.
+        loss = criterion(outputs, target)
 
         # Accumulate the loss
         total_loss += loss.item()
@@ -422,7 +409,7 @@ def visualizar_valores_pixeles(output, target):
     axs[1].title.set_text('Output de la Red')
     for i in range(output_np.shape[0]):
         for j in range(output_np.shape[1]):
-            text = axs[0].text(j, i, f'{output_np[i, j]:.0f}',
+            text = axs[1].text(j, i, f'{output_np[i, j]:.0f}',
                                ha="center", va="center", color="w", fontsize=6)
 
     # Target
@@ -430,7 +417,7 @@ def visualizar_valores_pixeles(output, target):
     axs[0].title.set_text('Target')
     for i in range(target_np.shape[0]):
         for j in range(target_np.shape[1]):
-            text = axs[1].text(j, i, f'{target_np[i, j]:.0f}',
+            text = axs[0].text(j, i, f'{target_np[i, j]:.0f}',
                                ha="center", va="center", color="w", fontsize=6)
 
     plt.show()

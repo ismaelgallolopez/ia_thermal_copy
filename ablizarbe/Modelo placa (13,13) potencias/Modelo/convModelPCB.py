@@ -114,7 +114,7 @@ scaled_scalar = scaler_scalar.fit_transform(dataset.scalar_dataset)
 scaled_output = scaler_output.fit_transform(dataset.outputs_dataset)
 
 
-dataset = PCBDataset(scaled_input, scaled_output, scaled_scalar)
+#dataset = PCBDataset(scaled_input, scaled_output, scaled_scalar)
 
 # Separando Train and Test
 batch_size = 64
@@ -265,7 +265,7 @@ for epoch in range(num_epochs):
     print(f"Epoch [{epoch+1}/{num_epochs}], Loss: {avg_loss:.4f}, Current LR: {last_lr}")
 # %%
 #Guardar el modelo
-torch.save(model.state_dict(), 'modelos\modelo_potenciasMOD.pth')
+torch.save(model.state_dict(), 'modelos\modelo_potencias.pth')
 
 # %%
 model.load_state_dict(torch.load('modelos\modelo_potencias.pth'))
@@ -303,62 +303,71 @@ with torch.no_grad():
 
 # Compute the average loss over all batches
 avg_loss = total_loss / total_batches
-print(f'Test Loss: {avg_loss:.4f}')
+print(f'Test Loss: {avg_loss:.6f}')
 
 
 # %%
+
+##############################################
+############# MOSTRAR RESULTADOS #############
+##############################################
+
 import matplotlib.pyplot as plt
 
-# Put the model in evaluation mode
 model.eval()
+# Función para visualizar el output de la red y el target
+def visualizar_valores_pixeles(output, target):
+    # Convertir los tensores a numpy y asegurarse de que están en CPU
+    output_np = output.squeeze().cpu().detach().numpy()
+    target_np = target.squeeze().cpu().detach().numpy()
+    
+    fig, axs = plt.subplots(1, 2, figsize=(10, 5))
+    
+    # Asegurarse de que las celdas de la grilla sean lo suficientemente grandes para el texto
+    fig.tight_layout(pad=10.0)
+    
+    # Output de la red
+    axs[1].imshow(output_np, cmap='viridis', interpolation='nearest')
+    axs[1].title.set_text('Output de la Red')
+    for i in range(output_np.shape[0]):
+        for j in range(output_np.shape[1]):
+            text = axs[1].text(j, i, f'{output_np[i, j]:.2f}',
+                               ha="center", va="center", color="w", fontsize=6)
 
-# Keep track of the count to stop after 10 samples
-count = 0
+    # Target
+    axs[0].imshow(target_np, cmap='viridis', interpolation='nearest')
+    axs[0].title.set_text('Target')
+    for i in range(target_np.shape[0]):
+        for j in range(target_np.shape[1]):
+            text = axs[0].text(j, i, f'{target_np[i, j]:.2f}',
+                               ha="center", va="center", color="w", fontsize=6)
 
-# Disable gradient computation
-with torch.no_grad():
+    plt.show()
+
+count = 0 
+with torch.no_grad(): 
     for batch, target, scalar in test_loader:
 
-        # Ensure the scalar tensor is properly shaped and move data to the correct device if using CUDA
+        # Prepare the data and target
         scalar = scalar.view(scalar.size(0), 1)
-        if torch.cuda.is_available():
-            batch, scalar, target = batch.cuda(), scalar.cuda(), target.cuda()
+        batch, scalar, target = batch.cuda(), scalar.cuda(), target.cuda()
+
 
         real_target = torch.zeros((target.size(0), 2, 2))
         real_target[:,0,0], real_target[:,1,1], real_target[:,1,0], real_target[:,0,1] = target[:,6,3], target[:,6,9], target[:,3,6], target[:,9,6]
-        # Forward pass to get outputs
+
+        # Forward pass
         outputs = model(batch, scalar)
+        
+        outputs = outputs.view(-1, 2, 2)
 
-        outputs = scaler_output.inverse_transform(outputs)
-        real_target = scaler_output.inverse_transform(real_target)
-        # Convert outputs and target to CPU for visualization if necessary
-        outputs = outputs.cpu()
-        real_target = real_target.cpu()
+        #outputs = scaler_output.inverse_transform(outputs)
+        #real_target = scaler_output.inverse_transform(real_target)
 
-        for i in range(batch.size(0)):
-            if count >= 10:
-                break  # Break the loop after visualizing 10 samples
-            
-            plt.figure(figsize=(6, 3))
-
-            # Plot real target
-            plt.subplot(1, 2, 1)
-            plt.imshow(real_target[i].view(2, 2), cmap='hot', interpolation='nearest')
-            plt.title('Real Target')
-            plt.colorbar()
-
-            # Plot model output
-            plt.subplot(1, 2, 2)
-            plt.imshow(outputs[i].detach().view(2, 2), cmap='hot', interpolation='nearest')
-            plt.title('Model Output')
-            plt.colorbar()
-
-            plt.show()
-            print("Real Target:", real_target[i])
-            print("Model Output:", outputs[i])
-
+        
+        
+        for i in range(5):
+            visualizar_valores_pixeles(outputs[i], real_target[i])
             count += 1
-        if count >= 10:
-            break  # Break the loop after visualizing 10 samples
-
+        if count>= 5: break
 # %%
