@@ -394,7 +394,6 @@ last_test_loss = np.inf
 ############# TRAIN LOOP #############
 ######################################
 
-
 # Número de épocas
 num_epochs = 75
 

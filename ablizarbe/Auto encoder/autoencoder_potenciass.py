@@ -562,11 +562,12 @@ with torch.no_grad():
         input = input.to(device)    
 
         # Pasar los datos por el modelo
-        encoded = encoder(target)
         latentvector = mlp(input)
+        general_decoded = general_decoder(latentvector)
+        residual_decoded = residual_decoder(general_decoded)
         
         # Calcular la pérdida
-        loss = criterionReconstruction(latentvector, encoded)
+        loss = criterionReconstruction(residual_decoded, target)
         total_loss += loss.item()
         
     # Calcular la pérdida promedio

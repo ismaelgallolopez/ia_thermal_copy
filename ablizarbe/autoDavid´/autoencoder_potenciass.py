@@ -314,50 +314,66 @@ test_loader = DataLoader(dataset, batch_size=batch_size, sampler=test_sampler)
 class Encoder(nn.Module):
     def __init__(self):
         super(Encoder, self).__init__()
-        self.fc1 = nn.Linear(13*13, 128)
-        self.fc2 = nn.Linear(128, 128)
-        self.fc3 = nn.Linear(128, 64)
-        self.fc4 = nn.Linear(64, 11)
+        self.conv1 = nn.Conv2d(1, 16*capasmult, kernel_size=3, padding=1)
+        self.conv2 = nn.Conv2d(16*capasmult, 32*capasmult, kernel_size=3, padding=1)  
+        self.conv3 = nn.Conv2d(32*capasmult, 16*capasmult, kernel_size=3, padding=1)  
+        self.conv4 = nn.Conv2d(16*capasmult, 4*capasmult, kernel_size=3, padding=1) 
+        self.pool = nn.MaxPool2d(2, 2) 
+        self.adaptativepool = nn.AdaptiveAvgPool2d((8,8))
+        self.linear1 = nn.Linear(4*2*2*capasmult, 9)
 
     def forward(self, x):
-        x = F.leaky_relu(self.fc1(x))
-        x = F.leaky_relu(self.fc2(x))
-        x = F.leaky_relu(self.fc3(x))
-        x = F.leaky_relu(self.fc4(x))
+        x = F.leaky_relu(self.conv1(x))
+        x = self.adaptativepool(x)
+        x = F.leaky_relu(self.conv2(x))
+        x = self.pool(x)
+        x = F.leaky_relu(self.conv3(x))
+        x = self.pool(x)
+        x = F.leaky_relu(self.conv4(x))
+        x = x.view(-1, 4*2*2*capasmult)
+        x = self.linear1(x)
         return x
 
 # Definir el Decodificador General (GCD)
 class GeneralDecoder(nn.Module):
     def __init__(self):
         super(GeneralDecoder, self).__init__()
-        self.fc1 = nn.Linear(11, 64)
-        self.fc2 = nn.Linear(64, 128)
-        self.fc3 = nn.Linear(128, 128)
-        self.fc4 = nn.Linear(128, 13*13)
+        self.linear1 = nn.Linear(9, 4*2*2*capasmult)
+        self.conv1 = nn.Conv2d(4*capasmult, 16*capasmult, kernel_size=3, padding=1)
+        self.conv2 = nn.Conv2d(16*capasmult, 32*capasmult, kernel_size=3, padding=1)
+        self.conv3 = nn.Conv2d(32*capasmult, 16*capasmult, kernel_size=3, padding=1)
+        self.conv4 = nn.Conv2d(16*capasmult, 1, kernel_size=3, padding=1)
+        self.upsampleSpecial = nn.Upsample(size=(13,13), mode='bilinear', align_corners=True)
+        self.up = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
 
     def forward(self, x):
-        x = F.leaky_relu(self.fc1(x))
-        x = F.leaky_relu(self.fc2(x))
-        x = F.leaky_relu(self.fc3(x))
-        x = self.fc4(x)
+        x = self.linear1(x)
+        x = x.view(-1, 4*capasmult, 2, 2)
+        x = F.leaky_relu(self.conv1(x))
+        x = self.up(x)
+        x = F.leaky_relu(self.conv2(x))
+        x = self.up(x)
+        x = F.leaky_relu(self.conv3(x))
+        x = self.upsampleSpecial(x)
+        x = self.conv4(x)
         return x
 
 # Definir el Decodificador Residual (RCD)
 class ResidualDecoder(nn.Module):
     def __init__(self):
         super(ResidualDecoder, self).__init__()
-        self.fc1 = nn.Linear(13*13, 128)
-        self.fc2 = nn.Linear(128, 128)
-        self.fc3 = nn.Linear(128, 128)
-        self.fc4 = nn.Linear(128, 13*13)
+        self.conv1 = nn.Conv2d(1, 16*capasmult, kernel_size=3, padding=1)
+        self.conv2 = nn.Conv2d(16*capasmult, 32*capasmult, kernel_size=3, padding=1)
+        self.conv3 = nn.Conv2d(32*capasmult, 16*capasmult, kernel_size=3, padding=1)
+        self.conv4 = nn.Conv2d(16*capasmult, 1, kernel_size=3, padding=1)
 
     def forward(self, x):
         input = x
-        residual = F.leaky_relu(self.fc1(x))
-        residual = F.leaky_relu(self.fc2(residual))
-        residual = F.leaky_relu(self.fc3(residual))
-        residual = self.fc4(residual)
-        return input + residual  # Sumar el input con el residuo para obtener el output
+        residual = F.leaky_relu(self.conv1(x))
+        residual = F.leaky_relu(self.conv2(residual))
+        residual = F.leaky_relu(self.conv3(residual))
+        residual = self.conv4(residual)
+        return input + residual 
 
 
 # Definir el MLP
@@ -369,7 +385,7 @@ class MLP(nn.Module):
         self.fc3 = nn.Linear(128, 128)
         self.fc4 = nn.Linear(128, 128)
         self.fc5 = nn.Linear(128, 64)
-        self.fc6 = nn.Linear(64, 11)
+        self.fc6 = nn.Linear(64, 9)
 
     def forward(self, x):
         x = F.leaky_relu(self.fc1(x))
@@ -408,10 +424,10 @@ last_test_loss = np.inf
 
 
 # Número de épocas
-num_epochs = 50
+num_epochs = 100
 
 # Ruta para guardar los modelos
-base_path = 'modelos\modeloBueno_{}.pth'
+base_path = 'modelos\modeloCONV_{}.pth'
 base_path2  = 'modelos\modeloPrueba_{}.pth'
 
 modelsload = {
@@ -440,7 +456,7 @@ for epoch in range(num_epochs):
 
     for input, target, _ in train_loader: 
 
-        target = target.view(-1, 13*13).to(device)
+        target = target.view(-1, 1, 13, 13).to(device)
         input = input.to(device)
         batch_size = target.size(0)
         
@@ -472,7 +488,7 @@ for epoch in range(num_epochs):
     with torch.no_grad():
         total_loss = 0
         for input, target, _ in test_loader:
-            target = target.view(-1, 13*13).to(device)  # Asegurándonos que el tensor está en el dispositivo correcto
+            target = target.view(-1, 1, 13, 13).to(device)  # Asegurándonos que el tensor está en el dispositivo correcto
             input = input.to(device)
 
             # Pasar los datos por el modelo
@@ -507,7 +523,7 @@ model_path = 'modelos\modeloPrueba_MLP.pth'
 mlp.load_state_dict(torch.load(model_path))
 
 
-base_path = 'modelos\modeloBueno_{}.pth'
+base_path = 'modelos\modeloCONV_{}.pth'
 
 modelsload = {
     "encoder": encoder,
@@ -533,7 +549,7 @@ mlp.eval()
 with torch.no_grad():
     total_loss = 0
     for input, target, _ in test_loader:
-        target = target.view(-1, 13*13).to(device)  # Asegurándonos que el tensor está en el dispositivo correcto
+        target = target.view(-1, 1, 13, 13).to(device)  # Asegurándonos que el tensor está en el dispositivo correcto
         input = input.to(device)
 
         # Pasar los datos por el modelo
@@ -570,15 +586,16 @@ residual_decoder.eval()
 with torch.no_grad():
     total_loss = 0
     for input, target, _ in test_loader:
-        target = target.view(-1, 13*13).to(device)  # Asegurándonos que el tensor está en el dispositivo correcto
+        target = target.view(-1, 1, 13, 13).to(device)  # Asegurándonos que el tensor está en el dispositivo correcto
         input = input.to(device)    
 
         # Pasar los datos por el modelo
-        encoded = encoder(target)
         latentvector = mlp(input)
+        general_decoded = general_decoder(latentvector)
+        residual_decoded = residual_decoder(general_decoded)
         
         # Calcular la pérdida
-        loss = criterionReconstruction(latentvector, encoded)
+        loss = criterionReconstruction(residual_decoded, target)
         total_loss += loss.item()
         
     # Calcular la pérdida promedio
@@ -621,7 +638,7 @@ with torch.no_grad():
     for batch, target, scalar in test_loader:
         
         
-        target = target = target.view(-1, 13*13).to(device)
+        target = target.view(-1, 1, 13, 13).to(device)
         batch = batch.to(device) 
 
         # Process the data through the model
@@ -691,7 +708,7 @@ with torch.no_grad():
     for input, target, scalar in test_loader:
 
         # Prepare the data and target
-        target = target.view(-1, 13*13).to(device)
+        target = target.view(-1, 1, 13, 13).to(device)
         input = input.to(device)
 
         # Pasar los datos por el modelo
