@@ -360,10 +360,10 @@ scaled_output = scaler_output.fit_transform(dataset.outputs_dataset)
 dataset = PCBDataset(scaled_input, scaled_output, scaled_scalar)
 
 # Separando Train and Test
-train_cases = 20
+train_cases = 30
 test_cases = 1000
 
-batch_size = 20
+batch_size = 30
 test_size = 0.1
 
 #CAMBIAR A GUSTO
@@ -549,7 +549,7 @@ last_test_loss = np.inf
 ############# TRAIN LOOP #############
 ######################################
 
-num_epochs = 300
+num_epochs = 1000
 
 start_time = time.time()
 
@@ -577,12 +577,12 @@ for epoch in range(num_epochs):
         outputs_interfaces[:,0,0], outputs_interfaces[:,0,1], outputs_interfaces[:,1,0], outputs_interfaces[:,1,1] = outputs[:,0,0], outputs[:,0,12], outputs[:,12,0], outputs[:,12,12]
 
         #Desestandarizar para la física
-        batch_p = scaler_input.inverse_transform(batch)
-        outputs_p = scaler_output.inverse_transform(outputs)
-        scalar_p = scaler_scalar.inverse_transform(scalar)
+        #batch_p = scaler_input.inverse_transform(batch)
+        #outputs_p = scaler_output.inverse_transform(outputs)
+        #scalar_p = scaler_scalar.inverse_transform(scalar)
 
-        loss_p = criterionPhysics(outputs_p.view(outputs.size(0),13,13),batch_p[:,0,:,:].view(batch.size(0),13,13),batch_p[:,1,:,:].view(batch.size(0),13,13),scalar_p.view(batch.size(0),1))
-        loss = 2*criterion(outputs, target) +  criterion(outputs_interfaces,T_interfaces) + loss_p
+        #loss_p = criterionPhysics(outputs_p.view(outputs.size(0),13,13),batch_p[:,0,:,:].view(batch.size(0),13,13),batch_p[:,1,:,:].view(batch.size(0),13,13),scalar_p.view(batch.size(0),1))
+        loss = 2*criterion(outputs, target) +  criterion(outputs_interfaces,T_interfaces) #+ loss_p
 
         # Backward pass and optimize
         loss.backward()
@@ -622,17 +622,17 @@ for epoch in range(num_epochs):
     # Compute the average loss over all batches
     avg_test_loss = total_loss / total_batches
 
-    #print(f"Epoch [{epoch+1}/{num_epochs}], Loss: {avg_loss:.8f}, Current LR: {last_lr}")
+    print(f"Epoch [{epoch+1}/{num_epochs}], Loss: {avg_loss:.8f}, Current LR: {last_lr}")
     if avg_test_loss < last_test_loss:
-        #print("{:.8f} -----> {:.8f}   Saving...".format(last_test_loss,avg_test_loss))
-        torch.save(model.state_dict(), 'modelos\ finetuning.pth')
+        print("{:.8f} -----> {:.8f}   Saving...".format(last_test_loss,avg_test_loss))
+        torch.save(model.state_dict(), 'modelos\extreme.pth')
         last_test_loss = avg_test_loss
 
 end_time = time.time() 
 total_time = end_time - start_time 
 
 minutes, seconds = divmod(total_time, 60)
-#print(f"Total training time: {int(minutes)} minutes and {int(seconds)} seconds") 
+print(f"Total training time: {int(minutes)} minutes and {int(seconds)} seconds") 
 
 
 #%%
@@ -640,7 +640,7 @@ minutes, seconds = divmod(total_time, 60)
 ############# LOAD MODEL #############
 ######################################
 
-model.load_state_dict(torch.load('modelos\ finetuning.pth'))
+model.load_state_dict(torch.load('modelos\extreme.pth'))
 model.eval()
 
 # Variables to track losses and the number of batches
