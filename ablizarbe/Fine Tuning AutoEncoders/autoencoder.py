@@ -288,9 +288,9 @@ indices = list(range(num_train))
 
 #SOLO ACTIVAR PARA ESTUDIOS
 seed = 50
-#torch.manual_seed(seed) 
-#torch.cuda.manual_seed(seed)
-#np.random.seed(seed)
+torch.manual_seed(seed) 
+torch.cuda.manual_seed(seed)
+np.random.seed(seed)
 
 np.random.shuffle(indices)
 
@@ -368,6 +368,8 @@ class ResidualDecoder(nn.Module):
             param.requires_grad = True
         for param in self.fc3.parameters():
             param.requires_grad = True
+        for param in self.fc2.parameters():
+            param.requires_grad = True
 
     def forward(self, x):
         input = x
@@ -420,6 +422,10 @@ scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=15)
 # Definir las funciones de pérdida
 criterionReconstruction = nn.MSELoss()
 
+model_path = 'modelosAuto\modeloCONV_residualDecoder.pth'
+
+residual_decoder.load_state_dict(torch.load(model_path))
+
 last_test_loss = np.inf
 
 #%%
@@ -430,7 +436,7 @@ last_test_loss = np.inf
 
 
 # Número de épocas
-num_epochs = 100
+num_epochs = 3000
 
 # Ruta para guardar los modelos
 base_path = 'modelosAuto\modeloCONV_{}.pth'
@@ -439,7 +445,6 @@ base_path2  = 'modelosAuto\modeloFineTuning_{}.pth'
 modelsload = {
     "encoder": encoder,
     "generalDecoder": general_decoder,
-    "residualDecoder": residual_decoder,
     "mlp": mlp
 }
 
@@ -463,7 +468,7 @@ for epoch in range(num_epochs):
 
     for input, target, _ in train_loader: 
 
-        target = target.view(-1, 1, 13, 13).to(device)
+        target = target.view(-1, 13*13).to(device)
         input = input.to(device)
         batch_size = target.size(0)
         
@@ -496,7 +501,7 @@ for epoch in range(num_epochs):
     with torch.no_grad():
         total_loss = 0
         for input, target, _ in test_loader:
-            target = target.view(-1, 1, 13, 13).to(device)  # Asegurándonos que el tensor está en el dispositivo correcto
+            target = target.view(-1, 13*13).to(device)  # Asegurándonos que el tensor está en el dispositivo correcto
             input = input.to(device)
 
             # Pasar los datos por el modelo
@@ -558,7 +563,7 @@ mlp.eval()
 with torch.no_grad():
     total_loss = 0
     for input, target, _ in test_loader:
-        target = target.view(-1, 1, 13, 13).to(device)  # Asegurándonos que el tensor está en el dispositivo correcto
+        target = target.view(-1, 13*13).to(device)  # Asegurándonos que el tensor está en el dispositivo correcto
         input = input.to(device)
 
         # Pasar los datos por el modelo
@@ -597,7 +602,7 @@ mlp.eval()
 with torch.no_grad():
     total_loss = 0
     for input, target, _ in test_loader:
-        target = target.view(-1, 1, 13, 13).to(device)  # Asegurándonos que el tensor está en el dispositivo correcto
+        target = target.view(-1, 13*13).to(device)  # Asegurándonos que el tensor está en el dispositivo correcto
         input = input.to(device)    
 
         # Pasar los datos por el modelo
@@ -670,7 +675,7 @@ with torch.no_grad():
     for input, target, scalar in test_loader:
 
         # Prepare the data and target
-        target = target.view(-1, 1, 13, 13).to(device)
+        target = target.view(-1,13*13).to(device)
         input = input.to(device)
 
         # Pasar los datos por el modelo

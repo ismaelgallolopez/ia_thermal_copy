@@ -270,7 +270,7 @@ dataset = PCBDataset(scaled_input, scaled_output, scaled_scalar)
 
 capasmult = 32
 # Separando Train and Test
-train_cases = 30
+train_cases = 20
 test_cases = 1000
 
 batch_size = 50
@@ -288,9 +288,9 @@ indices = list(range(num_train))
 
 #SOLO ACTIVAR PARA ESTUDIOS
 seed = 50
-#torch.manual_seed(seed) 
-#torch.cuda.manual_seed(seed)
-#np.random.seed(seed)
+torch.manual_seed(seed) 
+torch.cuda.manual_seed(seed)
+np.random.seed(seed)
 
 np.random.shuffle(indices)
 
@@ -450,7 +450,7 @@ last_test_loss = np.inf
 
 
 # Número de épocas
-num_epochs = 100
+num_epochs = 200
 
 # Ruta para guardar los modelos
 base_path = 'modelosDavid\modeloCONV_{}.pth'

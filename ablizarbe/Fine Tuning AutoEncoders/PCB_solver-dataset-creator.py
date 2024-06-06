@@ -388,7 +388,33 @@ class PCBDataset(Dataset):
 
     
 
+#%%
 
+import numpy as np
+from pyDOE2 import lhs
+
+# Define the ranges for each variable
+temp_min, temp_max = 250, 350
+power_min, power_max = 0.1, 5.0
+
+# Number of variables and samples
+n_variables = 9
+n_samples = 20  # Choose the number of samples you need
+
+# Generate LHS samples
+lhs_samples = lhs(n_variables, samples=n_samples)
+
+# Scale the samples to the appropriate ranges
+scaled_samples = np.zeros_like(lhs_samples)
+for i in range(4):  # Interface temperatures
+    scaled_samples[:, i] = lhs_samples[:, i] * (temp_max - temp_min) + temp_min
+scaled_samples[:, 4] = lhs_samples[:, 4] * (temp_max - temp_min) + temp_min  # Ambient temperature
+for i in range(5, 9):  # Power dissipators
+    scaled_samples[:, i] = lhs_samples[:, i] * (power_max - power_min) + power_min
+
+# Print the scaled samples
+print("Sampled cases:")
+print(scaled_samples)
 #%%
 
 ##############################################################
