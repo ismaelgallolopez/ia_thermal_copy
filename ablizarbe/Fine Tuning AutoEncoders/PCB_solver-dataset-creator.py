@@ -389,6 +389,10 @@ class PCBDataset(Dataset):
     
 
 #%%
+######################################################
+########### DISTRIBUCIÓN UNIFORME DE DATOS ###########
+######################################################
+
 
 import numpy as np
 from pyDOE2 import lhs
@@ -399,29 +403,45 @@ power_min, power_max = 0.1, 5.0
 
 # Number of variables and samples
 n_variables = 9
-n_samples = 20  # Choose the number of samples you need
+n_samples = 18  # Choose the number of samples you need
 
 # Generate LHS samples
 lhs_samples = lhs(n_variables, samples=n_samples)
 
 # Scale the samples to the appropriate ranges
 scaled_samples = np.zeros_like(lhs_samples)
-for i in range(4):  # Interface temperatures
-    scaled_samples[:, i] = lhs_samples[:, i] * (temp_max - temp_min) + temp_min
-scaled_samples[:, 4] = lhs_samples[:, 4] * (temp_max - temp_min) + temp_min  # Ambient temperature
-for i in range(5, 9):  # Power dissipators
+
+for i in range(4):  # Power dissipators
     scaled_samples[:, i] = lhs_samples[:, i] * (power_max - power_min) + power_min
 
+for i in range(4, 8):  # Interface temperatures
+    scaled_samples[:, i] = lhs_samples[:, i] * (temp_max - temp_min) + temp_min
+
+scaled_samples[:, 8] = lhs_samples[:, 8] * (temp_max - temp_min) + temp_min
 # Print the scaled samples
 print("Sampled cases:")
 print(scaled_samples)
+
+scaled_samples_output = []
+
+for i in range(n_samples):
+    # Obtener los resultados de la función
+    resultados,__,_ = PCB_case_2(T_interfaces=scaled_samples[i,4:8],Q_heaters=scaled_samples[i,0:4],Tenv=scaled_samples[i,8])
+    resultados = resultados.reshape(13,13)
+
+    #Añadimos a los datos las matrices de resultados
+    scaled_samples_output.append(resultados)
+
+scaled_samples_output = np.array(scaled_samples_output)
+
+extra = np.zeros(n_samples)    
 #%%
 
 ##############################################################
 ################# CREACIÓN DEL DATASET #######################
 ##############################################################
 
-n_entradas = 2000
+n_entradas = 1000
 nodos_lado = 13
 
 input = []
@@ -457,12 +477,16 @@ for i in range(n_entradas):
 
 #Convertimos a arrays
 input = np.array(input)
+input = np.concatenate((scaled_samples, input), axis=0)
 input = torch.tensor(input, dtype=torch.float32)
 
+
 scalar_input = np.array(TenvAleatorias)
+scalar_input = np.concatenate((extra, scalar_input), axis=0)
 scalar_input = torch.tensor(scalar_input, dtype=torch.float32)
 
 output = np.array(output)
+output = np.concatenate((scaled_samples_output, output), axis=0)
 output = torch.tensor(output, dtype=torch.float32)
 
 #Guardamos el dataset
