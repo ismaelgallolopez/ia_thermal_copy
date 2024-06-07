@@ -393,9 +393,8 @@ class PCBDataset(Dataset):
 ########### DISTRIBUCIÓN UNIFORME DE DATOS ###########
 ######################################################
 
-
 import numpy as np
-from pyDOE2 import lhs
+from scipy.optimize import differential_evolution
 
 # Define the ranges for each variable
 temp_min, temp_max = 250, 350
@@ -403,21 +402,36 @@ power_min, power_max = 0.1, 5.0
 
 # Number of variables and samples
 n_variables = 9
-n_samples = 18  # Choose the number of samples you need
+n_samples = 15  # Choose the number of samples you need
 
-# Generate LHS samples
+# Initial LHS sample
+from pyDOE2 import lhs
 lhs_samples = lhs(n_variables, samples=n_samples)
 
+# Objective function to maximize minimum distance between points
+def min_distance_objective(samples):
+    samples = samples.reshape((n_samples, n_variables))
+    dist = np.min(np.linalg.norm(samples[:, np.newaxis, :] - samples[np.newaxis, :, :], axis=2))
+    return -dist
+
+# Bounds for the optimizer
+bounds = [(0, 1)] * (n_samples * n_variables)
+
+# Perform differential evolution
+result = differential_evolution(min_distance_objective, bounds, maxiter=1000)
+optimized_samples = result.x.reshape((n_samples, n_variables))
+
 # Scale the samples to the appropriate ranges
-scaled_samples = np.zeros_like(lhs_samples)
+scaled_samples = np.zeros_like(optimized_samples)
 
 for i in range(4):  # Power dissipators
-    scaled_samples[:, i] = lhs_samples[:, i] * (power_max - power_min) + power_min
+    scaled_samples[:, i] = optimized_samples[:, i] * (power_max - power_min) + power_min
 
 for i in range(4, 8):  # Interface temperatures
-    scaled_samples[:, i] = lhs_samples[:, i] * (temp_max - temp_min) + temp_min
+    scaled_samples[:, i] = optimized_samples[:, i] * (temp_max - temp_min) + temp_min
 
-scaled_samples[:, 8] = lhs_samples[:, 8] * (temp_max - temp_min) + temp_min
+scaled_samples[:, 8] = optimized_samples[:, 8] * (temp_max - temp_min) + temp_min
+
 # Print the scaled samples
 print("Sampled cases:")
 print(scaled_samples)
@@ -425,11 +439,11 @@ print(scaled_samples)
 scaled_samples_output = []
 
 for i in range(n_samples):
-    # Obtener los resultados de la función
-    resultados,__,_ = PCB_case_2(T_interfaces=scaled_samples[i,4:8],Q_heaters=scaled_samples[i,0:4],Tenv=scaled_samples[i,8])
-    resultados = resultados.reshape(13,13)
+    # Obtain the results from the function
+    resultados, __, _ = PCB_case_2(T_interfaces=scaled_samples[i,4:8], Q_heaters=scaled_samples[i,0:4], Tenv=scaled_samples[i,8])
+    resultados = resultados.reshape(13, 13)
 
-    #Añadimos a los datos las matrices de resultados
+    # Add the result matrices to the data
     scaled_samples_output.append(resultados)
 
 scaled_samples_output = np.array(scaled_samples_output)

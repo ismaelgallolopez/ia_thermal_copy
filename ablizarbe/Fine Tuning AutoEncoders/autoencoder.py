@@ -1,10 +1,10 @@
 #%%
 import torch
 import numpy as np
-
+import time
 
 #Pytorch dataset
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset, DataLoader, Subset
 from torch.utils.data.sampler import SubsetRandomSampler
 
 # PyTorch model
@@ -268,40 +268,53 @@ scaled_output = scaler_output.fit_transform(dataset.outputs_dataset)
 
 dataset = PCBDataset(scaled_input, scaled_output, scaled_scalar)
 
-capasmult = 32
+#SOLO ACTIVAR PARA ESTUDIOS
+seed = 50
+#torch.manual_seed(seed) 
+#torch.cuda.manual_seed(seed)
+#np.random.seed(seed)
+
+
 # Separando Train and Test
-train_cases = 20
+train_cases = 14
 test_cases = 1000
+
+capasmult = 32
 
 batch_size = 50
 test_size = 0.1
 
 #CAMBIAR A GUSTO
-num_train = test_cases + train_cases 
-split = int(np.floor(test_cases))
+#num_train = test_cases + train_cases 
+#split = int(np.floor(test_cases))
 
 #num_train = int(len(dataset)) 
 #split = int(np.floor(test_size * num_train))
 
 
-indices = list(range(num_train))
+#RANDOM SAMPLERS
+#indices = list(range(num_train))
 
-#SOLO ACTIVAR PARA ESTUDIOS
-seed = 50
-torch.manual_seed(seed) 
-torch.cuda.manual_seed(seed)
-np.random.seed(seed)
+#np.random.shuffle(indices)
 
-np.random.shuffle(indices)
+#train_idx, test_idx = indices[split:], indices[:split]
 
-train_idx, test_idx = indices[split:], indices[:split]
+#train_sampler = SubsetRandomSampler(train_idx)
+#test_sampler = SubsetRandomSampler(test_idx)
 
-train_sampler = SubsetRandomSampler(train_idx)
-test_sampler = SubsetRandomSampler(test_idx)
+# Indices for train and test sets
+train_idx = list(range(train_cases))
+test_idx = list(range(train_cases, train_cases + test_cases))
+
+# Create subsets
+train_subset = Subset(dataset, train_idx)
+test_subset = Subset(dataset, test_idx)
+
+
 
 #Creando los Datalaoders
-train_loader = DataLoader(dataset, batch_size=batch_size, sampler=train_sampler)
-test_loader = DataLoader(dataset, batch_size=batch_size, sampler=test_sampler)
+train_loader = DataLoader(train_subset, batch_size=batch_size, shuffle=False)
+test_loader = DataLoader(test_subset, batch_size=batch_size, shuffle=False)
 
 
 #%%
@@ -436,7 +449,9 @@ last_test_loss = np.inf
 
 
 # Número de épocas
-num_epochs = 3000
+num_epochs = 1300
+
+start_time = time.time()
 
 # Ruta para guardar los modelos
 base_path = 'modelosAuto\modeloCONV_{}.pth'
@@ -522,7 +537,13 @@ for epoch in range(num_epochs):
             print("{:.8f} -----> {:.8f}   Saving...".format(last_test_loss,avg_test_loss))
             torch.save(residual_decoder.state_dict(), base_path2.format("residualDecoder"))
             last_test_loss = avg_test_loss
-        
+
+end_time = time.time() 
+total_time = end_time - start_time 
+
+minutes, seconds = divmod(total_time, 60)
+print(f"Total training time: {int(minutes)} minutes and {int(seconds)} seconds") 
+print(f"Total training time: {int(total_time)} seconds")
    
 
 #%%
