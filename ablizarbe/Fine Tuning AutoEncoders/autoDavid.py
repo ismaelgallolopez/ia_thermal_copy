@@ -276,7 +276,7 @@ seed = 50
 
 
 # Separando Train and Test
-train_cases = 15
+train_cases = 20
 test_cases = 1000
 
 capasmult = 32

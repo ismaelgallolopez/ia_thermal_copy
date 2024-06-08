@@ -276,7 +276,7 @@ seed = 50
 
 
 # Separando Train and Test
-train_cases = 20
+#train_cases = 20
 test_cases = 1000
 
 capasmult = 32
@@ -327,70 +327,84 @@ test_loader = DataLoader(test_subset, batch_size=batch_size, shuffle=False)
 class Encoder(nn.Module):
     def __init__(self):
         super(Encoder, self).__init__()
-        self.fc1 = nn.Linear(13*13, 128)
-        self.fc2 = nn.Linear(128, 128)
-        self.fc3 = nn.Linear(128, 64)
-        self.fc4 = nn.Linear(64, 11)
+        self.conv1 = nn.Conv2d(1, 16*capasmult, kernel_size=3, padding=1)
+        self.conv2 = nn.Conv2d(16*capasmult, 32*capasmult, kernel_size=3, padding=1)  
+        self.conv3 = nn.Conv2d(32*capasmult, 16*capasmult, kernel_size=3, padding=1)  
+        self.conv4 = nn.Conv2d(16*capasmult, 4*capasmult, kernel_size=3, padding=1) 
+        self.pool = nn.MaxPool2d(2, 2) 
+        self.adaptativepool = nn.AdaptiveAvgPool2d((8,8))
+        self.linear1 = nn.Linear(4*2*2*capasmult, 9)
 
         # Freeze all layers by disabling grad
         for param in self.parameters():
             param.requires_grad = False
 
     def forward(self, x):
-        x = F.leaky_relu(self.fc1(x))
-        x = F.leaky_relu(self.fc2(x))
-        x = F.leaky_relu(self.fc3(x))
-        x = F.leaky_relu(self.fc4(x))
+        x = F.leaky_relu(self.conv1(x))
+        x = self.adaptativepool(x)
+        x = F.leaky_relu(self.conv2(x))
+        x = self.pool(x)
+        x = F.leaky_relu(self.conv3(x))
+        x = self.pool(x)
+        x = F.leaky_relu(self.conv4(x))
+        x = x.view(-1, 4*2*2*capasmult)
+        x = self.linear1(x)
         return x
 
 # Definir el Decodificador General (GCD)
 class GeneralDecoder(nn.Module):
     def __init__(self):
         super(GeneralDecoder, self).__init__()
-        self.fc1 = nn.Linear(11, 64)
-        self.fc2 = nn.Linear(64, 128)
-        self.fc3 = nn.Linear(128, 128)
-        self.fc4 = nn.Linear(128, 13*13)
+        self.linear1 = nn.Linear(9, 4*2*2*capasmult)
+        self.conv1 = nn.Conv2d(4*capasmult, 16*capasmult, kernel_size=3, padding=1)
+        self.conv2 = nn.Conv2d(16*capasmult, 32*capasmult, kernel_size=3, padding=1)
+        self.conv3 = nn.Conv2d(32*capasmult, 16*capasmult, kernel_size=3, padding=1)
+        self.conv4 = nn.Conv2d(16*capasmult, 1, kernel_size=3, padding=1)
+        self.upsampleSpecial = nn.Upsample(size=(13,13), mode='bilinear', align_corners=True)
+        self.up = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
 
         # Freeze all layers by disabling grad
         for param in self.parameters():
             param.requires_grad = False
 
     def forward(self, x):
-        x = F.leaky_relu(self.fc1(x))
-        x = F.leaky_relu(self.fc2(x))
-        x = F.leaky_relu(self.fc3(x))
-        x = self.fc4(x)
+        x = self.linear1(x)
+        x = x.view(-1, 4*capasmult, 2, 2)
+        x = F.leaky_relu(self.conv1(x))
+        x = self.up(x)
+        x = F.leaky_relu(self.conv2(x))
+        x = self.up(x)
+        x = F.leaky_relu(self.conv3(x))
+        x = self.upsampleSpecial(x)
+        x = self.conv4(x)
         return x
 
 # Definir el Decodificador Residual (RCD)
 class ResidualDecoder(nn.Module):
     def __init__(self):
         super(ResidualDecoder, self).__init__()
-        self.fc1 = nn.Linear(13*13, 128)
-        self.fc2 = nn.Linear(128, 128)
-        self.fc3 = nn.Linear(128, 128)
-        self.fc4 = nn.Linear(128, 13*13)
+        self.conv1 = nn.Conv2d(1, 16*capasmult, kernel_size=3, padding=1)
+        self.conv2 = nn.Conv2d(16*capasmult, 32*capasmult, kernel_size=3, padding=1)
+        self.conv3 = nn.Conv2d(32*capasmult, 16*capasmult, kernel_size=3, padding=1)
+        self.conv4 = nn.Conv2d(16*capasmult, 1, kernel_size=3, padding=1)
 
         # Freeze all layers by disabling grad
         for param in self.parameters():
             param.requires_grad = False
 
         # Unfreeze the layers
-        for param in self.fc4.parameters():
+        for param in self.conv4.parameters():
             param.requires_grad = True
-        for param in self.fc3.parameters():
-            param.requires_grad = True
-        for param in self.fc2.parameters():
+        for param in self.conv3.parameters():
             param.requires_grad = True
 
     def forward(self, x):
         input = x
-        residual = F.leaky_relu(self.fc1(x))
-        residual = F.leaky_relu(self.fc2(residual))
-        residual = F.leaky_relu(self.fc3(residual))
-        residual = self.fc4(residual)
-        return input + residual  # Sumar el input con el residuo para obtener el output
+        residual = F.leaky_relu(self.conv1(x))
+        residual = F.leaky_relu(self.conv2(residual))
+        residual = F.leaky_relu(self.conv3(residual))
+        residual = self.conv4(residual)
+        return input + residual 
 
 
 # Definir el MLP
@@ -402,7 +416,7 @@ class MLP(nn.Module):
         self.fc3 = nn.Linear(128, 128)
         self.fc4 = nn.Linear(128, 128)
         self.fc5 = nn.Linear(128, 64)
-        self.fc6 = nn.Linear(64, 11)
+        self.fc6 = nn.Linear(64, 9)
 
         # Freeze all layers by disabling grad
         for param in self.parameters():
@@ -435,7 +449,7 @@ scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=15)
 # Definir las funciones de pérdida
 criterionReconstruction = nn.MSELoss()
 
-model_path = 'modelosAuto\modeloCONV_residualDecoder.pth'
+model_path = 'modelosDavid\modeloCONV_residualDecoder.pth'
 
 residual_decoder.load_state_dict(torch.load(model_path))
 
@@ -449,13 +463,13 @@ last_test_loss = np.inf
 
 
 # Número de épocas
-num_epochs = 1300
+num_epochs = 400
 
 start_time = time.time()
 
 # Ruta para guardar los modelos
-base_path = 'modelosAuto\modeloCONV_{}.pth'
-base_path2  = 'modelosAuto\modeloFineTuning_{}.pth'
+base_path = 'modelosDavid\modeloCONV_{}.pth'
+base_path2  = 'modelosDavid\modeloFineTuning_{}.pth'
 
 modelsload = {
     "encoder": encoder,
@@ -483,7 +497,7 @@ for epoch in range(num_epochs):
 
     for input, target, _ in train_loader: 
 
-        target = target.view(-1, 13*13).to(device)
+        target = target.view(-1, 1, 13, 13).to(device)
         input = input.to(device)
         batch_size = target.size(0)
         
@@ -516,7 +530,7 @@ for epoch in range(num_epochs):
     with torch.no_grad():
         total_loss = 0
         for input, target, _ in test_loader:
-            target = target.view(-1, 13*13).to(device)  # Asegurándonos que el tensor está en el dispositivo correcto
+            target = target.view(-1, 1, 13, 13).to(device)  # Asegurándonos que el tensor está en el dispositivo correcto
             input = input.to(device)
 
             # Pasar los datos por el modelo
@@ -531,20 +545,19 @@ for epoch in range(num_epochs):
         # Calcular la pérdida promedio
         avg_test_loss = total_loss / len(test_loader)
         
-        print(f"Epoch {epoch+1}/{num_epochs}, Generator Loss: {avg_loss:.8f}, Current LR: {last_lr}")
+        #print(f"Epoch {epoch+1}/{num_epochs}, Generator Loss: {avg_loss:.8f}, Current LR: {last_lr}")
         
         if avg_test_loss < last_test_loss:
-            print("{:.8f} -----> {:.8f}   Saving...".format(last_test_loss,avg_test_loss))
+            #print("{:.8f} -----> {:.8f}   Saving...".format(last_test_loss,avg_test_loss))
             torch.save(residual_decoder.state_dict(), base_path2.format("residualDecoder"))
             last_test_loss = avg_test_loss
-
+        
 end_time = time.time() 
 total_time = end_time - start_time 
 
 minutes, seconds = divmod(total_time, 60)
-print(f"Total training time: {int(minutes)} minutes and {int(seconds)} seconds") 
-print(f"Total training time: {int(total_time)} seconds")
-   
+#print(f"Total training time: {int(minutes)} minutes and {int(seconds)} seconds") 
+#print(f"Total training time: {int(total_time)} seconds")
 
 #%%
 #######################################
@@ -552,13 +565,13 @@ print(f"Total training time: {int(total_time)} seconds")
 #######################################
     
 # Cargar los modelos
-model_path = 'modelosAuto\modeloFineTuning_residualDecoder.pth'
+model_path = 'modelosDavid\modeloFineTuning_residualDecoder.pth'
 
 
 residual_decoder.load_state_dict(torch.load(model_path))
 
 
-base_path = 'modelosAuto\modeloCONV_{}.pth'
+base_path = 'modelosDavid\modeloCONV_{}.pth'
 
 modelsload = {
     "encoder": encoder,
@@ -584,7 +597,7 @@ mlp.eval()
 with torch.no_grad():
     total_loss = 0
     for input, target, _ in test_loader:
-        target = target.view(-1, 13*13).to(device)  # Asegurándonos que el tensor está en el dispositivo correcto
+        target = target.view(-1, 1, 13, 13).to(device)  # Asegurándonos que el tensor está en el dispositivo correcto
         input = input.to(device)
 
         # Pasar los datos por el modelo
@@ -601,7 +614,7 @@ with torch.no_grad():
 
 last_test_loss = avg_test_loss
 
-print("Test Loss: {:.8f}".format(avg_test_loss))
+#print("Test Loss: {:.8f}".format(avg_test_loss))
 
 #%%
 ######################################
@@ -623,7 +636,7 @@ mlp.eval()
 with torch.no_grad():
     total_loss = 0
     for input, target, _ in test_loader:
-        target = target.view(-1, 13*13).to(device)  # Asegurándonos que el tensor está en el dispositivo correcto
+        target = target.view(-1, 1, 13, 13).to(device)  # Asegurándonos que el tensor está en el dispositivo correcto
         input = input.to(device)    
 
         # Pasar los datos por el modelo
@@ -643,76 +656,76 @@ with torch.no_grad():
     # Calcular la pérdida promedio
     avg_test_loss = total_loss / len(test_loader)
 
-print("Test Loss: {:.8f} grados".format(avg_test_loss))
+#print("Test Loss: {:.8f} grados".format(avg_test_loss))
 
 #%%
 ######################################################
 ############# MOSTRAR RESULTADOS GRAFICA #############
 ######################################################
 
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 
-# Enviar etiquetas al dispositivo correcto, por ejemplo 'cuda' si está disponible
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-encoder, general_decoder, residual_decoder = encoder.to(device), general_decoder.to(device), residual_decoder.to(device)
+# # Enviar etiquetas al dispositivo correcto, por ejemplo 'cuda' si está disponible
+# device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+# encoder, general_decoder, residual_decoder = encoder.to(device), general_decoder.to(device), residual_decoder.to(device)
 
 
-encoder.eval()
-general_decoder.eval()
-residual_decoder.eval()
-mlp.eval()
+# encoder.eval()
+# general_decoder.eval()
+# residual_decoder.eval()
+# mlp.eval()
 
-# Función para visualizar el output de la red y el target
-def visualizar_valores_pixeles(output, target):
-    # Convertir los tensores a numpy y asegurarse de que están en CPU
-    output_np = output.squeeze().cpu().detach().numpy()
-    target_np = target.squeeze().cpu().detach().numpy()
+# # Función para visualizar el output de la red y el target
+# def visualizar_valores_pixeles(output, target):
+#     # Convertir los tensores a numpy y asegurarse de que están en CPU
+#     output_np = output.squeeze().cpu().detach().numpy()
+#     target_np = target.squeeze().cpu().detach().numpy()
     
-    fig, axs = plt.subplots(1, 2, figsize=(10, 5))
+#     fig, axs = plt.subplots(1, 2, figsize=(10, 5))
     
-    # Asegurarse de que las celdas de la grilla sean lo suficientemente grandes para el texto
-    fig.tight_layout(pad=3.0)
+#     # Asegurarse de que las celdas de la grilla sean lo suficientemente grandes para el texto
+#     fig.tight_layout(pad=3.0)
     
-    # Output de la red
-    axs[1].imshow(output_np, cmap='viridis', interpolation='nearest')
-    axs[1].title.set_text('Output de la Red')
-    for i in range(output_np.shape[0]):
-        for j in range(output_np.shape[1]):
-            text = axs[1].text(j, i, f'{output_np[i, j]:.1f}',
-                               ha="center", va="center", color="w", fontsize=6)
+#     # Output de la red
+#     axs[1].imshow(output_np, cmap='viridis', interpolation='nearest')
+#     axs[1].title.set_text('Output de la Red')
+#     for i in range(output_np.shape[0]):
+#         for j in range(output_np.shape[1]):
+#             text = axs[1].text(j, i, f'{output_np[i, j]:.1f}',
+#                                ha="center", va="center", color="w", fontsize=6)
 
-    # Target
-    axs[0].imshow(target_np, cmap='viridis', interpolation='nearest')
-    axs[0].title.set_text('Target')
-    for i in range(target_np.shape[0]):
-        for j in range(target_np.shape[1]):
-            text = axs[0].text(j, i, f'{target_np[i, j]:.1f}',
-                               ha="center", va="center", color="w", fontsize=6)
+#     # Target
+#     axs[0].imshow(target_np, cmap='viridis', interpolation='nearest')
+#     axs[0].title.set_text('Target')
+#     for i in range(target_np.shape[0]):
+#         for j in range(target_np.shape[1]):
+#             text = axs[0].text(j, i, f'{target_np[i, j]:.1f}',
+#                                ha="center", va="center", color="w", fontsize=6)
 
-    plt.show()
+#     plt.show()
 
-count = 0 
-with torch.no_grad(): 
-    for input, target, scalar in test_loader:
+# count = 0 
+# with torch.no_grad(): 
+#     for input, target, scalar in test_loader:
 
-        # Prepare the data and target
-        target = target.view(-1,13*13).to(device)
-        input = input.to(device)
+#         # Prepare the data and target
+#         target = target.view(-1, 1, 13, 13).to(device)
+#         input = input.to(device)
 
-        # Pasar los datos por el modelo
-        encoded = mlp(input)
-        general_decoded = general_decoder(encoded)
-        residual_decoded = residual_decoder(general_decoded)
+#         # Pasar los datos por el modelo
+#         encoded = mlp(input)
+#         general_decoded = general_decoder(encoded)
+#         residual_decoded = residual_decoder(general_decoded)
 
-        residual_decoded = residual_decoded.view(-1, 13, 13)
-        target = target.view(-1, 13, 13)
+#         residual_decoded = residual_decoded.view(-1, 13, 13)
+#         target = target.view(-1, 13, 13)
         
-        # Desescalar los datos
-        outputs = scaler_output.inverse_transform(residual_decoded)
-        target = scaler_output.inverse_transform(target)
-        for i in range(5):
-            visualizar_valores_pixeles(outputs[i], target[i])
-            count += 1
-        if count>= 5: break
+#         # Desescalar los datos
+#         outputs = scaler_output.inverse_transform(residual_decoded)
+#         target = scaler_output.inverse_transform(target)
+#         for i in range(5):
+#             visualizar_valores_pixeles(outputs[i], target[i])
+#             count += 1
+#         if count>= 5: break
 
-# %%
+# # %%

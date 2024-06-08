@@ -392,31 +392,62 @@ class PCBDataset(Dataset):
 ######################################################
 ########### DISTRIBUCIÓN UNIFORME DE DATOS ###########
 ######################################################
-
 import numpy as np
-from scipy.stats import qmc
+from scipy.optimize import differential_evolution
+from pyDOE2 import lhs
+from collections import Counter
 
 # Number of variables and samples
 n_variables = 9
 n_samples = 15  # Choose the number of samples you need
+pop_size = 10   # Size of the population for differential evolution
 
-# Generate Sobol samples
-sampler = qmc.Sobol(d=n_variables, scramble=True)
-sobol_samples = sampler.random(n=n_samples)
-
-# Scale the samples to the appropriate ranges
+# Define the ranges for each variable
 temp_min, temp_max = 250, 350
 power_min, power_max = 0.1, 5.0
 
-scaled_samples = np.zeros_like(sobol_samples)
+# Store the results of each iteration
+results_list = []
+
+# Define the objective function to maximize the minimum distance between points
+def min_distance_objective(samples):
+    samples = samples.reshape((n_samples, n_variables))
+    dist = np.min(np.linalg.norm(samples[:, np.newaxis, :] - samples[np.newaxis, :, :], axis=2))
+    return -dist
+
+# Bounds for the optimizer
+bounds = [(0, 1)] * (n_samples * n_variables)
+
+# Perform the loop to optimize sampling
+for i in range(100):
+    # Generate initial LHS samples to form the initial population
+    initial_population = np.array([lhs(n_variables, samples=n_samples).flatten() for _ in range(pop_size)])
+    
+    # Perform differential evolution using the initial population
+    result = differential_evolution(min_distance_objective, bounds, maxiter=1000, init=initial_population)
+    optimized_samples = result.x.reshape((n_samples, n_variables))
+
+    results_list.append(tuple(map(tuple, optimized_samples)))
+
+# Count the occurrences of each unique result
+counter = Counter(results_list)
+
+# Find the most common result
+most_common_result, count = counter.most_common(1)[0]
+
+# Convert the result back to a NumPy array
+optimized_samples = np.array(most_common_result)
+
+# Scale the samples to the appropriate ranges
+scaled_samples = np.zeros_like(optimized_samples)
 
 for i in range(4):  # Power dissipators
-    scaled_samples[:, i] = sobol_samples[:, i] * (power_max - power_min) + power_min
+    scaled_samples[:, i] = optimized_samples[:, i] * (power_max - power_min) + power_min
 
 for i in range(4, 8):  # Interface temperatures
-    scaled_samples[:, i] = sobol_samples[:, i] * (temp_max - temp_min) + temp_min
+    scaled_samples[:, i] = optimized_samples[:, i] * (temp_max - temp_min) + temp_min
 
-scaled_samples[:, 8] = sobol_samples[:, 8] * (temp_max - temp_min) + temp_min
+scaled_samples[:, 8] = optimized_samples[:, 8] * (temp_max - temp_min) + temp_min
 
 # Print the scaled samples
 print("Sampled cases:")
@@ -438,6 +469,7 @@ scaled_samples_output = np.array(scaled_samples_output)
 print("Last set of optimized samples:")
 print(scaled_samples)
 
+extra = np.zeros(n_samples)  
 #%%
 
 ##############################################################

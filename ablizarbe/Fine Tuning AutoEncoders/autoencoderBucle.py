@@ -276,7 +276,7 @@ seed = 50
 
 
 # Separando Train and Test
-train_cases = 20
+#train_cases = 20
 test_cases = 1000
 
 capasmult = 32
@@ -449,7 +449,7 @@ last_test_loss = np.inf
 
 
 # Número de épocas
-num_epochs = 1300
+num_epochs = 2000
 
 start_time = time.time()
 
@@ -531,10 +531,10 @@ for epoch in range(num_epochs):
         # Calcular la pérdida promedio
         avg_test_loss = total_loss / len(test_loader)
         
-        print(f"Epoch {epoch+1}/{num_epochs}, Generator Loss: {avg_loss:.8f}, Current LR: {last_lr}")
+        #print(f"Epoch {epoch+1}/{num_epochs}, Generator Loss: {avg_loss:.8f}, Current LR: {last_lr}")
         
         if avg_test_loss < last_test_loss:
-            print("{:.8f} -----> {:.8f}   Saving...".format(last_test_loss,avg_test_loss))
+            #print("{:.8f} -----> {:.8f}   Saving...".format(last_test_loss,avg_test_loss))
             torch.save(residual_decoder.state_dict(), base_path2.format("residualDecoder"))
             last_test_loss = avg_test_loss
 
@@ -542,8 +542,8 @@ end_time = time.time()
 total_time = end_time - start_time 
 
 minutes, seconds = divmod(total_time, 60)
-print(f"Total training time: {int(minutes)} minutes and {int(seconds)} seconds") 
-print(f"Total training time: {int(total_time)} seconds")
+#print(f"Total training time: {int(minutes)} minutes and {int(seconds)} seconds") 
+#print(f"Total training time: {int(total_time)} seconds")
    
 
 #%%
@@ -601,7 +601,7 @@ with torch.no_grad():
 
 last_test_loss = avg_test_loss
 
-print("Test Loss: {:.8f}".format(avg_test_loss))
+#print("Test Loss: {:.8f}".format(avg_test_loss))
 
 #%%
 ######################################
@@ -643,76 +643,76 @@ with torch.no_grad():
     # Calcular la pérdida promedio
     avg_test_loss = total_loss / len(test_loader)
 
-print("Test Loss: {:.8f} grados".format(avg_test_loss))
+#print("Test Loss: {:.8f} grados".format(avg_test_loss))
 
 #%%
 ######################################################
 ############# MOSTRAR RESULTADOS GRAFICA #############
 ######################################################
 
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 
-# Enviar etiquetas al dispositivo correcto, por ejemplo 'cuda' si está disponible
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-encoder, general_decoder, residual_decoder = encoder.to(device), general_decoder.to(device), residual_decoder.to(device)
+# # Enviar etiquetas al dispositivo correcto, por ejemplo 'cuda' si está disponible
+# device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+# encoder, general_decoder, residual_decoder = encoder.to(device), general_decoder.to(device), residual_decoder.to(device)
 
 
-encoder.eval()
-general_decoder.eval()
-residual_decoder.eval()
-mlp.eval()
+# encoder.eval()
+# general_decoder.eval()
+# residual_decoder.eval()
+# mlp.eval()
 
-# Función para visualizar el output de la red y el target
-def visualizar_valores_pixeles(output, target):
-    # Convertir los tensores a numpy y asegurarse de que están en CPU
-    output_np = output.squeeze().cpu().detach().numpy()
-    target_np = target.squeeze().cpu().detach().numpy()
+# # Función para visualizar el output de la red y el target
+# def visualizar_valores_pixeles(output, target):
+#     # Convertir los tensores a numpy y asegurarse de que están en CPU
+#     output_np = output.squeeze().cpu().detach().numpy()
+#     target_np = target.squeeze().cpu().detach().numpy()
     
-    fig, axs = plt.subplots(1, 2, figsize=(10, 5))
+#     fig, axs = plt.subplots(1, 2, figsize=(10, 5))
     
-    # Asegurarse de que las celdas de la grilla sean lo suficientemente grandes para el texto
-    fig.tight_layout(pad=3.0)
+#     # Asegurarse de que las celdas de la grilla sean lo suficientemente grandes para el texto
+#     fig.tight_layout(pad=3.0)
     
-    # Output de la red
-    axs[1].imshow(output_np, cmap='viridis', interpolation='nearest')
-    axs[1].title.set_text('Output de la Red')
-    for i in range(output_np.shape[0]):
-        for j in range(output_np.shape[1]):
-            text = axs[1].text(j, i, f'{output_np[i, j]:.1f}',
-                               ha="center", va="center", color="w", fontsize=6)
+#     # Output de la red
+#     axs[1].imshow(output_np, cmap='viridis', interpolation='nearest')
+#     axs[1].title.set_text('Output de la Red')
+#     for i in range(output_np.shape[0]):
+#         for j in range(output_np.shape[1]):
+#             text = axs[1].text(j, i, f'{output_np[i, j]:.1f}',
+#                                ha="center", va="center", color="w", fontsize=6)
 
-    # Target
-    axs[0].imshow(target_np, cmap='viridis', interpolation='nearest')
-    axs[0].title.set_text('Target')
-    for i in range(target_np.shape[0]):
-        for j in range(target_np.shape[1]):
-            text = axs[0].text(j, i, f'{target_np[i, j]:.1f}',
-                               ha="center", va="center", color="w", fontsize=6)
+#     # Target
+#     axs[0].imshow(target_np, cmap='viridis', interpolation='nearest')
+#     axs[0].title.set_text('Target')
+#     for i in range(target_np.shape[0]):
+#         for j in range(target_np.shape[1]):
+#             text = axs[0].text(j, i, f'{target_np[i, j]:.1f}',
+#                                ha="center", va="center", color="w", fontsize=6)
 
-    plt.show()
+#     plt.show()
 
-count = 0 
-with torch.no_grad(): 
-    for input, target, scalar in test_loader:
+# count = 0 
+# with torch.no_grad(): 
+#     for input, target, scalar in test_loader:
 
-        # Prepare the data and target
-        target = target.view(-1,13*13).to(device)
-        input = input.to(device)
+#         # Prepare the data and target
+#         target = target.view(-1,13*13).to(device)
+#         input = input.to(device)
 
-        # Pasar los datos por el modelo
-        encoded = mlp(input)
-        general_decoded = general_decoder(encoded)
-        residual_decoded = residual_decoder(general_decoded)
+#         # Pasar los datos por el modelo
+#         encoded = mlp(input)
+#         general_decoded = general_decoder(encoded)
+#         residual_decoded = residual_decoder(general_decoded)
 
-        residual_decoded = residual_decoded.view(-1, 13, 13)
-        target = target.view(-1, 13, 13)
+#         residual_decoded = residual_decoded.view(-1, 13, 13)
+#         target = target.view(-1, 13, 13)
         
-        # Desescalar los datos
-        outputs = scaler_output.inverse_transform(residual_decoded)
-        target = scaler_output.inverse_transform(target)
-        for i in range(5):
-            visualizar_valores_pixeles(outputs[i], target[i])
-            count += 1
-        if count>= 5: break
+#         # Desescalar los datos
+#         outputs = scaler_output.inverse_transform(residual_decoded)
+#         target = scaler_output.inverse_transform(target)
+#         for i in range(5):
+#             visualizar_valores_pixeles(outputs[i], target[i])
+#             count += 1
+#         if count>= 5: break
 
 # %%
