@@ -415,70 +415,12 @@ for n_samples in[5,10,13,15,18,20,25,30,40]:
     CNNerror = []
 
     for _ in range(5):
-        # Number of variables and samples
-        n_variables = 9
-        #n_samples = 20  # Choose the number of samples you need
-
-        results_list = []
-
-        for i in range(25):
-
-            # Objective function to maximize minimum distance between points
-            def min_distance_objective(samples):
-                samples = samples.reshape((n_samples, n_variables))
-                dist = np.min(np.linalg.norm(samples[:, np.newaxis, :] - samples[np.newaxis, :, :], axis=2))
-                return -dist
-
-            # Bounds for the optimizer
-            bounds = [(0, 1)] * (n_samples * n_variables)
-
-            # Perform differential evolution
-            result = differential_evolution(min_distance_objective, bounds, maxiter=1000)
-            optimized_samples = result.x.reshape((n_samples, n_variables))
-
-            results_list.append(tuple(map(tuple, optimized_samples)))
-
-        # Count the occurrences of each unique result
-        counter = Counter(results_list)
-
-        # Find the most common result
-        most_common_result, count = counter.most_common(1)[0]
-
-        # Convert the result back to a NumPy array
-        optimized_samples = np.array(most_common_result)
-
-
-        # Scale the samples to the appropriate ranges
-        scaled_samples = np.zeros_like(optimized_samples)
-
-        for i in range(4):  # Power dissipators
-            scaled_samples[:, i] = optimized_samples[:, i] * (power_max - power_min) + power_min
-
-        for i in range(4, 8):  # Interface temperatures
-            scaled_samples[:, i] = optimized_samples[:, i] * (temp_max - temp_min) + temp_min
-
-        scaled_samples[:, 8] = optimized_samples[:, 8] * (temp_max - temp_min) + temp_min
-
-        scaled_samples_output = []
-
-        for i in range(n_samples):
-            # Obtain the results from the function
-            resultados, __, _ = PCB_case_2(T_interfaces=scaled_samples[i,4:8], Q_heaters=scaled_samples[i,0:4], Tenv=scaled_samples[i,8])
-            resultados = resultados.reshape(13, 13)
-
-            # Add the result matrices to the data
-            scaled_samples_output.append(resultados)
-
-        scaled_samples_output = np.array(scaled_samples_output)
-
-        extra = np.zeros(n_samples)    
-
 
         ##############################################################
         ################# CREACIÓN DEL DATASET #######################
         ##############################################################
 
-        n_entradas = 1000
+        n_entradas = 1000 + n_samples
         nodos_lado = 13
 
         input = []
@@ -511,16 +453,13 @@ for n_samples in[5,10,13,15,18,20,25,30,40]:
 
         #Convertimos a arrays
         input = np.array(input)
-        input = np.concatenate((scaled_samples, input), axis=0)
         input = torch.tensor(input, dtype=torch.float32)
 
 
         scalar_input = np.array(TenvAleatorias)
-        scalar_input = np.concatenate((extra, scalar_input), axis=0)
         scalar_input = torch.tensor(scalar_input, dtype=torch.float32)
 
         output = np.array(output)
-        output = np.concatenate((scaled_samples_output, output), axis=0)
         output = torch.tensor(output, dtype=torch.float32)
 
         #Guardamos el dataset
@@ -534,7 +473,7 @@ for n_samples in[5,10,13,15,18,20,25,30,40]:
         ################# CREACIÓN DEL DATASET #######################
         ##############################################################
 
-        n_entradas = 1000
+        n_entradas = 1000 + n_samples
         nodos_lado = 13
 
         input = []
@@ -544,21 +483,6 @@ for n_samples in[5,10,13,15,18,20,25,30,40]:
         potenciasAleatorias = np.random.uniform(0.1, 5, (n_entradas, 4))
         interfacesAleatorias = np.random.uniform(250, 350, (n_entradas, 4))
         TenvAleatorias = np.random.uniform(250, 350, n_entradas)
-
-        for i in range(n_samples):
-            #Convertimos en matrices las potencias y temperaturas de las interfaces
-            potencias = np.zeros((nodos_lado,nodos_lado))
-            interfaces = np.zeros((nodos_lado,nodos_lado))
-
-            potencias[6,3], potencias[3,6], potencias[9,3], potencias[9,9] =  scaled_samples[i,0:4]
-            interfaces[0,0], interfaces[0,nodos_lado-1], interfaces[nodos_lado-1,nodos_lado-1], interfaces[nodos_lado-1,0] =  scaled_samples[i,4:8]
-
-            #Añadimos a los datos las matrices de entrada
-            input1 = []
-            input1.append(potencias)
-            input1.append(interfaces)
-            input.append(input1)
-
 
         for i in range(n_entradas):
 
@@ -589,11 +513,9 @@ for n_samples in[5,10,13,15,18,20,25,30,40]:
         input = torch.tensor(input, dtype=torch.float32)
 
         scalar_input = np.array(TenvAleatorias)
-        scalar_input = np.concatenate((scaled_samples[:,8], scalar_input), axis=0)
         scalar_input = torch.tensor(scalar_input, dtype=torch.float32)
 
         output = np.array(output)
-        output = np.concatenate((scaled_samples_output, output), axis=0)
         output = torch.tensor(output, dtype=torch.float32)
 
         #Guardamos el dataset
