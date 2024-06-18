@@ -281,11 +281,6 @@ for i in range(n_entradas):
     #Añadimos a los datos las matrices de resultados
     output.append(resultados)
 
-    #Normalizamos los inputs
-    #potenciasAleatorias[i] = (potenciasAleatorias[i]-0.1)/5.
-    #interfacesAleatorias[i] = (interfacesAleatorias[i]-250)/350
-
-
     #Convertimos en matrices las potencias y temperaturas de las interfaces
     potencias = np.zeros((nodos_lado,nodos_lado))
     interfaces = np.zeros((nodos_lado,nodos_lado))
@@ -299,8 +294,6 @@ for i in range(n_entradas):
     input1.append(interfaces)
     input.append(input1)
 
-#Normalizamos las Tenv
-#TenvAleatorias = (TenvAleatorias-250)/350
 
 # %%
 

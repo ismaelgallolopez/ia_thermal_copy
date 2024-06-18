@@ -151,9 +151,8 @@ class LaEnergiaNoAparece(nn.Module):
         E_data = []
         E_id = []
         for id in range(self.n_nodes):
-            if id not in interfaces:
-                E_id.append(id)
-                E_data.append(GR)
+            E_id.append(id)
+            E_data.append(GR)
         indices = torch.tensor([E_id, E_id], dtype=torch.int64) 
         values = torch.tensor(E_data, dtype=torch.float32)  
         size = torch.Size([self.n_nodes, self.n_nodes])  
