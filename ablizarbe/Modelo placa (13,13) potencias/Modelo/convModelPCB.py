@@ -314,6 +314,20 @@ print(f'Test Loss: {avg_loss:.6f}')
 
 import matplotlib.pyplot as plt
 
+plt.style.use('default')
+
+plt.rcParams["figure.figsize"] = (6,4)
+
+#plt.rcParams["font.family"] = "Times New Roman"
+
+plt.rcParams["font.family"] = "lmroman10-regular"
+
+plt.rcParams["font.size"] = 12
+
+plt.rcParams["text.usetex"] = True
+
+plt.rcParams["axes.titlesize"] = 11
+
 model.eval()
 # Función para visualizar el output de la red y el target
 def visualizar_valores_pixeles(output, target):
@@ -328,7 +342,7 @@ def visualizar_valores_pixeles(output, target):
     
     # Output de la red
     axs[1].imshow(output_np, cmap='viridis', interpolation='nearest')
-    axs[1].title.set_text('Output de la Red')
+    axs[1].title.set_text('Output')
     for i in range(output_np.shape[0]):
         for j in range(output_np.shape[1]):
             text = axs[1].text(j, i, f'{output_np[i, j]:.2f}',
@@ -341,6 +355,9 @@ def visualizar_valores_pixeles(output, target):
         for j in range(target_np.shape[1]):
             text = axs[0].text(j, i, f'{target_np[i, j]:.2f}',
                                ha="center", va="center", color="w", fontsize=6)
+    
+    plt.savefig('PlantillaP.png', dpi=300, bbox_inches='tight')
+
 
     plt.show()
 

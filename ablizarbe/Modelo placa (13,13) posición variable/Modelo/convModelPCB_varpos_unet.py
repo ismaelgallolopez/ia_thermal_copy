@@ -114,7 +114,7 @@ class LaEnergiaNoAparece(nn.Module):
                 if id in interfaces:
                     K_rows.append(id)
                     K_cols.append(id)
-                    K_data.append(0)
+                    K_data.append(1)
                 else:
                     GLii = 0
                     if i+1 < nx:

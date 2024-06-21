@@ -275,7 +275,7 @@ TenvAleatorias = np.random.uniform(250, 350, n_entradas)
 for i in range(n_entradas):
 
     # Obtener los resultados de la función
-    resultados,__,_ = PCB_case_1(T_interfaces=interfacesAleatorias[i],Q_heaters=potenciasAleatorias[i],Tenv=TenvAleatorias[i])
+    resultados,__,_ = PCB_case_2(T_interfaces=interfacesAleatorias[i],Q_heaters=potenciasAleatorias[i],Tenv=TenvAleatorias[i])
     resultados = resultados.reshape(nodos_lado,nodos_lado)
 
     #Añadimos a los datos las matrices de resultados
@@ -290,7 +290,7 @@ for i in range(n_entradas):
     potencias = np.zeros((nodos_lado,nodos_lado))
     interfaces = np.zeros((nodos_lado,nodos_lado))
 
-    potencias[6,3], potencias[3,6], potencias[6,9], potencias[9,6] = potenciasAleatorias[i]
+    potencias[6,3], potencias[3,6], potencias[9,3], potencias[9,9] = potenciasAleatorias[i]
     interfaces[0,0], interfaces[0,nodos_lado-1], interfaces[nodos_lado-1,nodos_lado-1], interfaces[nodos_lado-1,0] = interfacesAleatorias[i]
 
     #Añadimos a los datos las matrices de entrada

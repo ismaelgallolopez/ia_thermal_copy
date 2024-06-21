@@ -88,14 +88,12 @@ class LaEnergiaNoAparece(nn.Module):
     def __init__(self, L:float=0.1,thickness:float=0.001,board_k:float=10,ir_emmisivity:float=0.8):
         super(LaEnergiaNoAparece, self).__init__()
         
-        self.primeravez = True
-
         nx = 13
         ny = 13
 
         self.n_nodes = nx*ny # número total de nodos
         
-        interfaces = [0,self.n_nodes-1,self.n_nodes*self.n_nodes-1,self.n_nodes*self.n_nodes-self.n_nodes]
+        interfaces = [0,nx-1,nx*nx-1,nx*nx-nx]
 
         self.Boltzmann_cte = 5.67E-8
 
@@ -116,7 +114,7 @@ class LaEnergiaNoAparece(nn.Module):
                 if id in interfaces:
                     K_rows.append(id)
                     K_cols.append(id)
-                    K_data.append(0)
+                    K_data.append(1)
                 else:
                     GLii = 0
                     if i+1 < nx:
@@ -175,12 +173,14 @@ class LaEnergiaNoAparece(nn.Module):
             for id in range(self.n_nodes):
                 if heaters[i,id] != 0:
                     Q[i,id] = heaters[i,id]
-
+                elif interfaces[i,id] != 0:
+                    Q[i,id] = interfaces[i,id]
 
         #Generación del vector T
         T = torch.flatten(outputs, start_dim=1)
 
         excessEnergy = torch.zeros((Q.size(0),self.n_nodes))
+
 
         T, Q, Tenv = T.cuda(), Q.cuda(), Tenv.cuda()
 
@@ -190,14 +190,6 @@ class LaEnergiaNoAparece(nn.Module):
             Tenv_unsqueezed = Tenv[i].unsqueeze(1)
             excessEnergy[i,:] = torch.flatten(torch.sparse.mm(self.K,T_unsqueezed) + self.Boltzmann_cte*torch.sparse.mm(self.E,(T_unsqueezed**4-Tenv_unsqueezed**4)) - Q[i].unsqueeze(1))
 
-        if self.primeravez:
-            self.energyScaler.fit(excessEnergy)
-            self.mean = self.energyScaler.mean.clone().detach().requires_grad_(True)
-            self.std = self.energyScaler.std.clone().detach().requires_grad_(True)
-            self.primeravez = False
-            
-        #excessEnergy = (excessEnergy- self.mean)/self.std
-        #print(torch.mean(torch.abs(excessEnergy)))
 
         return torch.mean(torch.abs(excessEnergy))
 
@@ -559,7 +551,9 @@ for epoch in range(num_epochs):
         outputs_p = scaler_output.inverse_transform(outputs)
         scalar_p = scaler_scalar.inverse_transform(scalar)
 
-        loss = 2*criterion(outputs, target) +  criterion(outputs_interfaces,T_interfaces)  + 2*criterionPhysics(outputs_p.view(outputs.size(0),13,13),batch_p[:,0,:,:].view(batch.size(0),13,13),batch_p[:,1,:,:].view(batch.size(0),13,13),scalar_p.view(batch.size(0),1))
+
+        loss_p = criterionPhysics(outputs_p.view(outputs.size(0),13,13),batch_p[:,0,:,:].view(batch.size(0),13,13),batch_p[:,1,:,:].view(batch.size(0),13,13),scalar_p.view(batch.size(0),1))
+        loss = 2*criterion(outputs, target) +  criterion(outputs_interfaces,T_interfaces)  + 0.75*loss_p
         #loss = 2*criterion(outputs, target) + criterion(outputs_interfaces,T_interfaces)
 
 
@@ -673,6 +667,9 @@ with torch.no_grad():
         # Forward pass
         outputs = model(batch, scalar)
         outputs = outputs.view(outputs.size(0),13,13)
+
+        outputs = scaler_output.inverse_transform(outputs)
+        target = scaler_output.inverse_transform(target)
 
         loss = criterion(outputs, target)
 
