@@ -1,6 +1,7 @@
 #%%
 import torch
 import numpy as np
+import time
 
 #Pytorch dataset
 from torch.utils.data import Dataset, DataLoader
@@ -121,7 +122,7 @@ train_cases = 1900
 test_cases = 100
 
 batch_size = 64
-test_size = 0.1
+test_size = 0.0032
 num_train = int(len(dataset))
 indices = list(range(num_train))
 np.random.shuffle(indices)
@@ -405,7 +406,6 @@ with torch.no_grad():
 # Compute the average loss over all batches
 avg_test_loss = total_loss / total_batches
 print(f'Test Loss: {avg_test_loss:.6f}')
-
 
 # %%
 import matplotlib.pyplot as plt

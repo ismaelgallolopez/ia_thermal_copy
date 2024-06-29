@@ -215,14 +215,15 @@ dataset = PCBDataset(scaled_input, scaled_output, scaled_scalar)
 
 
 diccionario = {
-    125:7,
-    160:10,
-    175:10,
-    190:8
+    10: (2, 0.5),
+    20: (2, 1),
+    30: (3, 0.25),
+    40: (2, 0.25)
 }
 
-for train_cases, batch_size in diccionario.items():
-    for parameter in [0.25,0.5,0.75,1,1.5]:
+
+for train_cases, (batch_size,parameter) in diccionario.items():
+    for _ in [1]:
         print(f"Train cases: {train_cases}, Batch size: {batch_size}")
         print(f"Parameter: {parameter}")
         # Separando Train and Test
