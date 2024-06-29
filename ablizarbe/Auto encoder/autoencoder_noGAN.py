@@ -369,7 +369,7 @@ last_test_loss = np.inf
 
 
 # Número de épocas
-num_epochs = 500
+num_epochs = 10
 
 # Ruta para guardar los modelos
 base_path = 'modelos\modelo10_{}.pth'
@@ -411,7 +411,7 @@ for epoch in range(num_epochs):
         g_loss = gen_loss
         g_loss.backward()
         optimizer.step()
-        total_loss += loss.item()
+        total_loss += g_loss.item()
     
     avg_loss = total_loss/num_batches
     scheduler.step(avg_loss)
@@ -457,7 +457,7 @@ for epoch in range(num_epochs):
 #######################################
     
 # Cargar los modelos
-base_path = 'modelos\modeloBueno_{}.pth'
+base_path = 'modelos\modelo10_{}.pth'
 
 models = {
     "encoder": encoder,
