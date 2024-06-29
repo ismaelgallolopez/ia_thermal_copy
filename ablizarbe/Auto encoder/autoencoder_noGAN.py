@@ -355,7 +355,7 @@ residual_decoder = ResidualDecoder()
 
 # Definir los optimizadores
 optimizer = optim.Adam(list(encoder.parameters()) + list(general_decoder.parameters()) + list(residual_decoder.parameters()), lr=0.0001)
-scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=15)
+scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=50)
 
 # Definir las funciones de pérdida
 criterionReconstruction = nn.MSELoss()
@@ -363,7 +363,6 @@ criterionReconstruction = nn.MSELoss()
 last_test_loss = np.inf
 
 #%%
-
 ######################################
 ############# TRAIN LOOP #############
 ######################################
@@ -527,6 +526,9 @@ with torch.no_grad():
         encoded = encoder(target)
         general_decoded = general_decoder(encoded)
         residual_decoded = residual_decoder(general_decoded)
+
+        residual_decoded = scaler_output.inverse_transform(residual_decoded)
+        target = scaler_output.inverse_transform(target)
         
         # Calcular la pérdida
         loss = criterionReconstruction(residual_decoded, target)
@@ -543,6 +545,21 @@ print("Test Loss: {:.8f}".format(avg_test_loss))
 ##############################################
 
 import matplotlib.pyplot as plt
+
+
+plt.style.use('default')
+
+plt.rcParams["figure.figsize"] = (6,4)
+
+#plt.rcParams["font.family"] = "Times New Roman"
+
+plt.rcParams["font.family"] = "lmroman10-regular"
+
+plt.rcParams["font.size"] = 12
+
+plt.rcParams["text.usetex"] = True
+
+plt.rcParams["axes.titlesize"] = 11
 
 # Enviar etiquetas al dispositivo correcto, por ejemplo 'cuda' si está disponible
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -566,10 +583,10 @@ def visualizar_valores_pixeles(output, target):
     
     # Output de la red
     axs[1].imshow(output_np, cmap='viridis', interpolation='nearest')
-    axs[1].title.set_text('Output de la Red')
+    axs[1].title.set_text('Output')
     for i in range(output_np.shape[0]):
         for j in range(output_np.shape[1]):
-            text = axs[1].text(j, i, f'{output_np[i, j]:.1f}',
+            text = axs[1].text(j, i, f'{output_np[i, j]:.0f}',
                                ha="center", va="center", color="w", fontsize=6)
 
     # Target
@@ -577,9 +594,104 @@ def visualizar_valores_pixeles(output, target):
     axs[0].title.set_text('Target')
     for i in range(target_np.shape[0]):
         for j in range(target_np.shape[1]):
-            text = axs[0].text(j, i, f'{target_np[i, j]:.1f}',
+            text = axs[0].text(j, i, f'{target_np[i, j]:.0f}',
                                ha="center", va="center", color="w", fontsize=6)
+            
+    plt.savefig('AutoMLPBueno.png', dpi=300, bbox_inches='tight')
 
+    plt.show()
+
+
+def visualizar_diferencia_pixeles(output, target):
+    # Convertir los tensores a numpy y asegurarse de que están en CPU
+    output_np = output.squeeze().cpu().detach().numpy()
+    target_np = target.squeeze().cpu().detach().numpy()
+    
+    # Calcular la diferencia
+    diferencia_np =np.abs( output_np - target_np)
+    
+    fig, ax = plt.subplots(figsize=(5, 5))
+    
+    # Asegurarse de que las celdas de la grilla sean lo suficientemente grandes para el texto
+    fig.tight_layout(pad=3.0)
+    
+    # Diferencia entre el output de la red y el target
+    cax = ax.imshow(diferencia_np, cmap='viridis', interpolation='nearest')
+    ax.title.set_text('Absolute Error')
+    # for i in range(diferencia_np.shape[0]):
+    #     for j in range(diferencia_np.shape[1]):
+    #         text = ax.text(j, i, f'{diferencia_np[i, j]:.f}',
+    #                        ha="center", va="center", color="w", fontsize=6)
+    
+    fig.colorbar(cax)
+    plt.savefig('AutoMLPError.png', dpi=300, bbox_inches='tight')
+    plt.show()
+
+
+
+count = 0 
+with torch.no_grad(): 
+    for batch, target, scalar in test_loader:
+
+        # Prepare the data and target
+        target = target.view(-1, 13*13).to(device)
+
+        # Pasar los datos por el modelo
+        encoded = encoder(target)
+        general_decoded = general_decoder(encoded)
+        residual_decoded = residual_decoder(general_decoded)
+
+        residual_decoded = residual_decoded.view(-1, 13, 13)
+        target = target.view(-1, 13, 13)
+        
+        # Desescalar los datos
+        outputs = scaler_output.inverse_transform(residual_decoded)
+        target = scaler_output.inverse_transform(target)
+        for i in range(1):
+            visualizar_valores_pixeles(outputs[i], target[i])
+            visualizar_diferencia_pixeles(outputs[i], target[i])
+            count += 1
+        if count>= 1: break
+        
+# %%
+##############################################
+############# MOSTRAR DIFERENCIA #############
+##############################################
+
+import matplotlib.pyplot as plt
+import torch
+
+# Enviar etiquetas al dispositivo correcto, por ejemplo 'cuda' si está disponible
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+encoder, general_decoder, residual_decoder = encoder.to(device), general_decoder.to(device), residual_decoder.to(device)
+
+encoder.eval()
+general_decoder.eval()
+residual_decoder.eval()
+
+# Función para visualizar la diferencia entre el output de la red y el target
+def visualizar_diferencia_pixeles(output, target):
+    # Convertir los tensores a numpy y asegurarse de que están en CPU
+    output_np = output.squeeze().cpu().detach().numpy()
+    target_np = target.squeeze().cpu().detach().numpy()
+    
+    # Calcular la diferencia
+    diferencia_np =np.abs( output_np - target_np)
+    
+    fig, ax = plt.subplots(figsize=(5, 5))
+    
+    # Asegurarse de que las celdas de la grilla sean lo suficientemente grandes para el texto
+    fig.tight_layout(pad=3.0)
+    
+    # Diferencia entre el output de la red y el target
+    cax = ax.imshow(diferencia_np, cmap='viridis', interpolation='nearest')
+    ax.title.set_text('Abolute Error')
+    # for i in range(diferencia_np.shape[0]):
+    #     for j in range(diferencia_np.shape[1]):
+    #         text = ax.text(j, i, f'{diferencia_np[i, j]:.f}',
+    #                        ha="center", va="center", color="w", fontsize=6)
+    
+    fig.colorbar(cax)
     plt.show()
 
 count = 0 
@@ -601,8 +713,8 @@ with torch.no_grad():
         outputs = scaler_output.inverse_transform(residual_decoded)
         target = scaler_output.inverse_transform(target)
         for i in range(5):
-            visualizar_valores_pixeles(outputs[i], target[i])
+            visualizar_diferencia_pixeles(outputs[i], target[i])
             count += 1
-        if count>= 5: break
-        
+        if count >= 5: break
+
 # %%

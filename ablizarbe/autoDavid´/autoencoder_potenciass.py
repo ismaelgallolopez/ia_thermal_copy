@@ -417,7 +417,6 @@ criterionReconstruction = nn.MSELoss()
 last_test_loss = np.inf
 
 #%%
-
 ######################################
 ############# TRAIN LOOP #############
 ######################################
@@ -606,15 +605,68 @@ with torch.no_grad():
     # Calcular la pérdida promedio
     avg_test_loss = total_loss / len(test_loader)
 
-print("Test Loss: {:.8f} grados".format(avg_test_loss))
+print("Test Loss: {:.8f}".format(avg_test_loss))
 
+#%%
+##################################################
+############# TEST LOOP TRANSFORMER ##############
+##################################################
+
+def relative_squared_error(preds, target):
+    mean = torch.mean(target)
+    sum_squared_error = torch.sum((target- preds) ** 2)
+    sum_error_squared_mean = torch.sum((target - mean)** 2) 
+    return  sum_squared_error / sum_error_squared_mean
+
+# Enviar etiquetas al dispositivo correcto, por ejemplo 'cuda' si está disponible
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+encoder, general_decoder, residual_decoder = encoder.to(device), general_decoder.to(device), residual_decoder.to(device)
+
+    
+# Poner los modelos en modo de evaluación
+encoder.eval()
+general_decoder.eval()
+residual_decoder.eval()
+
+# Desactivar el cálculo de gradientes para la evaluación
+with torch.no_grad():
+    total_loss = 0
+    for input, target, _ in test_loader:
+        target = target.view(-1, 1, 13, 13).to(device)  # Asegurándonos que el tensor está en el dispositivo correcto
+        input = input.to(device)    
+
+        # Pasar los datos por el modelo
+        latentvector = mlp(input)
+        encoded = encoder(target)
+
+
+        # Calcular la pérdida
+        loss = relative_squared_error(latentvector, encoded)
+        total_loss += loss.item()
+        
+    # Calcular la pérdida promedio
+    avg_test_loss = total_loss / len(test_loader)
+
+print("Test Loss: {:.8f}".format(avg_test_loss))
 #%%
 ##############################################
 ############# MOSTRAR RESULTADOS #############
 ##############################################
 
 import matplotlib.pyplot as plt
+plt.style.use('default')
 
+plt.rcParams["figure.figsize"] = (6,4)
+
+#plt.rcParams["font.family"] = "Times New Roman"
+
+plt.rcParams["font.family"] = "lmroman10-regular"
+
+plt.rcParams["font.size"] = 12
+
+plt.rcParams["text.usetex"] = True
+
+plt.rcParams["axes.titlesize"] = 11
 
 def visualizar_valores_vectores(output, target):
     # Convert tensors to numpy and make sure they're on CPU
@@ -625,14 +677,16 @@ def visualizar_valores_vectores(output, target):
     fig, axs = plt.subplots(1, 2, figsize=(15, 5))
     
     # Plot the output vector
-    axs[1].plot(output_np, marker='o', linestyle='-', color='blue')
-    axs[1].title.set_text('Output de la Red')
-    axs[1].grid(True)
+    axs[1].plot(output_np, marker='.', linestyle='--', color='darkcyan')
+    axs[1].title.set_text('Output')
+    axs[1].grid(False)
     
     # Plot the target vector
-    axs[0].plot(target_np, marker='x', linestyle='--', color='red')
+    axs[0].plot(target_np, marker='.', linestyle='-', color='crimson')
     axs[0].title.set_text('Target')
-    axs[0].grid(True)
+    axs[0].grid(False)
+
+    plt.savefig('PotCONV.png', dpi=300, bbox_inches='tight')
 
     # Show the plot
     plt.show()
@@ -656,11 +710,11 @@ with torch.no_grad():
         target = encoded
         
         # Visualize the first 5 vectors
-        for i in range(min(5, outputs.size(0))): # Ensure we don't go out of bounds
+        for i in range(min(1, outputs.size(0))): # Ensure we don't go out of bounds
             visualizar_valores_vectores(outputs[i], target[i])
             count += 1
-            if count >= 5: break
-        if count >= 5: break
+            if count >= 1: break
+        if count >= 1: break
 
         
 #%%
@@ -695,7 +749,7 @@ def visualizar_valores_pixeles(output, target):
     axs[1].title.set_text('Output de la Red')
     for i in range(output_np.shape[0]):
         for j in range(output_np.shape[1]):
-            text = axs[1].text(j, i, f'{output_np[i, j]:.1f}',
+            text = axs[1].text(j, i, f'{output_np[i, j]:.0f}',
                                ha="center", va="center", color="w", fontsize=6)
 
     # Target
@@ -703,9 +757,36 @@ def visualizar_valores_pixeles(output, target):
     axs[0].title.set_text('Target')
     for i in range(target_np.shape[0]):
         for j in range(target_np.shape[1]):
-            text = axs[0].text(j, i, f'{target_np[i, j]:.1f}',
+            text = axs[0].text(j, i, f'{target_np[i, j]:.0f}',
                                ha="center", va="center", color="w", fontsize=6)
+    
+    plt.savefig('PotDistribucionCONV.png', dpi=300, bbox_inches='tight')
 
+    plt.show()
+
+def visualizar_diferencia_pixeles(output, target):
+    # Convertir los tensores a numpy y asegurarse de que están en CPU
+    output_np = output.squeeze().cpu().detach().numpy()
+    target_np = target.squeeze().cpu().detach().numpy()
+    
+    # Calcular la diferencia
+    diferencia_np =np.abs( output_np - target_np)
+    
+    fig, ax = plt.subplots(figsize=(5, 5))
+    
+    # Asegurarse de que las celdas de la grilla sean lo suficientemente grandes para el texto
+    fig.tight_layout(pad=3.0)
+    
+    # Diferencia entre el output de la red y el target
+    cax = ax.imshow(diferencia_np, cmap='viridis', interpolation='nearest')
+    ax.title.set_text('Absolute Error')
+    # for i in range(diferencia_np.shape[0]):
+    #     for j in range(diferencia_np.shape[1]):
+    #         text = ax.text(j, i, f'{diferencia_np[i, j]:.f}',
+    #                        ha="center", va="center", color="w", fontsize=6)
+    
+    fig.colorbar(cax)
+    plt.savefig('PotErrorCONV.png', dpi=300, bbox_inches='tight')
     plt.show()
 
 count = 0 
@@ -727,9 +808,71 @@ with torch.no_grad():
         # Desescalar los datos
         outputs = scaler_output.inverse_transform(residual_decoded)
         target = scaler_output.inverse_transform(target)
-        for i in range(5):
+        for i in range(1):
             visualizar_valores_pixeles(outputs[i], target[i])
+            visualizar_diferencia_pixeles(outputs[i], target[i])
             count += 1
-        if count>= 5: break
+        if count>= 1: break
 
+# %%
+###################################################
+############# MOSTRAR ESPACIO LATENTE #############
+###################################################
+
+import matplotlib.pyplot as plt
+
+
+plt.style.use('default')
+
+plt.rcParams["figure.figsize"] = (6,4)
+
+#plt.rcParams["font.family"] = "Times New Roman"
+
+plt.rcParams["font.family"] = "lmroman10-regular"
+
+plt.rcParams["font.size"] = 12
+
+plt.rcParams["text.usetex"] = True
+
+plt.rcParams["axes.titlesize"] = 11
+
+def visualizar_valores_vectores(target):
+    # Convert tensor to numpy and make sure it's on CPU
+    target_np = target.cpu().detach().numpy()
+    
+    # Create a plot for the target
+    plt.figure(figsize=(10, 5))
+    
+    # Plot the target vector
+    plt.plot(target_np, marker='.', linestyle='-', color='crimson')
+    plt.title('Latent Space Convolutional')
+    plt.grid(False)
+
+    plt.savefig('LatentSpaceMLP.png', dpi=300, bbox_inches='tight')
+
+    # Show the plot
+    plt.show()
+
+# Adapted loop for handling vectors
+count = 0
+with torch.no_grad():
+    for batch, target, scalar in test_loader:
+        
+        target = target.view(-1,1, 13,13).to(device)
+        batch = batch.to(device) 
+
+        # Process the data through the model
+        encoded = encoder(target)
+        latentvector = mlp(batch)
+
+        # Descale the data
+        outputs = latentvector
+        target = encoded
+        
+        # Visualize the first 5 target vectors
+        for i in range(min(1, target.size(0))): # Ensure we don't go out of bounds
+            visualizar_valores_vectores(target[i])
+            count += 1
+            if count >= 1: break
+        if count >= 1: break
 # %%

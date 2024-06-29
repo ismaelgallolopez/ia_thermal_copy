@@ -1,6 +1,7 @@
 #%%
 import torch
 import numpy as np
+import time
 
 #Pytorch dataset
 from torch.utils.data import Dataset, DataLoader
@@ -219,8 +220,8 @@ scaled_output = scaler_output.fit_transform(dataset.outputs_dataset)
 dataset = PCBDataset(scaled_input, scaled_output, scaled_scalar)
 
 # Separando Train and Test
-train_cases = 160
-test_cases = 1000
+train_cases = 29999
+test_cases = 1
 
 batch_size = 64
 test_size = 0.1
@@ -390,7 +391,6 @@ scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=15)
 last_test_loss = np.inf
 
 #%%
-
 ######################################
 ############# TRAIN LOOP #############
 ######################################

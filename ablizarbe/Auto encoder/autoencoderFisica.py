@@ -279,17 +279,32 @@ torch.manual_seed(seed)
 torch.cuda.manual_seed(seed)
 np.random.seed(seed)
 
-for train_cases in [60,80,100,125,150,160,175,190,200,250]:
-    for batch_size in [2,3,4,5,6,7,8,9,10]:
-        print("Train Cases: ",train_cases)
-        print("Batch Size: ",batch_size)
+
+diccionario = {
+    60: (4, 0.75),
+    80: (10, 1.25),
+    100: (3, 0.25),
+    125: (10, 0.25),
+    150: (3, 0.25),
+    160: (5, 1),
+    175: (8, 1.25),
+    190: (5, 1),
+    200: (3, 0.25),
+    250: (8, 0.25)
+}
+
+for train_cases, (batch_size2, parameter) in diccionario.items():
+    for capasmult in [32]:
+        print("Train Cases: ", train_cases, end=", ")
+        print("Batch Size: ", batch_size2, end=", ")
+        print("Parameter: ",parameter)
         # Separando Train and Test
         #train_cases = 100
         test_cases = 1000
 
         capasmult = 32
 
-        #batch_size = 50
+        batch_size = batch_size2
         test_size = 0.1
 
         #CAMBIAR A GUSTO
@@ -429,7 +444,7 @@ for train_cases in [60,80,100,125,150,160,175,190,200,250]:
         ##############################################
 
         # Número de épocas
-        num_epochs = 1000
+        num_epochs = 1500
 
         # Ruta para guardar los modelos
         base_path = 'modelos\modeloPI_{}.pth'
@@ -585,7 +600,7 @@ for train_cases in [60,80,100,125,150,160,175,190,200,250]:
 
 
         # Número de épocas
-        num_epochs = 600
+        num_epochs = 1200
 
         start_time = time.time()
 
@@ -625,14 +640,14 @@ for train_cases in [60,80,100,125,150,160,175,190,200,250]:
                 target = target.view(-1, 13, 13)
 
                 #Desestandarizar para la física
-                batch_p = scaler_input.inverse_transform(input.cpu())   
-                outputs_p = scaler_output.inverse_transform(target)
+                #batch_p = scaler_input.inverse_transform(input.cpu())   
+                #outputs_p = scaler_output.inverse_transform(target)
 
-                batch_p = batch_p.cuda()
+                #batch_p = batch_p.cuda()
 
-                loss_p = criterionPhysics(outputs_p.view(residual_decoded.size(0),13,13),batch_p[:,:4].view(input.size(0),4),batch_p[:,4:8].view(input.size(0),4),batch_p[:,8].view(input.size(0),1))
+                #loss_p = criterionPhysics(outputs_p.view(residual_decoded.size(0),13,13),batch_p[:,:4].view(input.size(0),4),batch_p[:,4:8].view(input.size(0),4),batch_p[:,8].view(input.size(0),1))
 
-                g_loss = criterionReconstruction(residual_decoded, target) + loss_p
+                g_loss = criterionReconstruction(residual_decoded, target)# + parameter*loss_p
                 
                 g_loss.backward()
                 optimizer.step()
@@ -779,7 +794,7 @@ for train_cases in [60,80,100,125,150,160,175,190,200,250]:
             # Calcular la pérdida promedio
             avg_test_loss = total_loss / len(test_loader)
 
-        print("Test Loss: {:.8f} grados".format(avg_test_loss))
+        print("Test Loss: {:.8f}".format(avg_test_loss))
 
 #%%
 ######################################################

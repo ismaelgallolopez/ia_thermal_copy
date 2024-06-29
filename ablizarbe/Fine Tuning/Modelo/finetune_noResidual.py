@@ -780,6 +780,20 @@ with torch.no_grad():
 
 import matplotlib.pyplot as plt
 
+plt.style.use('default')
+
+plt.rcParams["figure.figsize"] = (6,4)
+
+#plt.rcParams["font.family"] = "Times New Roman"
+
+plt.rcParams["font.family"] = "lmroman10-regular"
+
+plt.rcParams["font.size"] = 12
+
+plt.rcParams["text.usetex"] = True
+
+plt.rcParams["axes.titlesize"] = 11
+
 model.eval()
 # Función para visualizar el output de la red y el target
 def visualizar_valores_pixeles(preoutput, output, target):
@@ -795,14 +809,14 @@ def visualizar_valores_pixeles(preoutput, output, target):
     
     # PreOutput from the network
     axs[2].imshow(preoutput_np, cmap='viridis', interpolation='nearest')
-    axs[2].title.set_text('Modelo Original')
+    axs[2].title.set_text('Original Model')
     for i in range(preoutput_np.shape[0]):
         for j in range(preoutput_np.shape[1]):
             axs[2].text(j, i, f'{preoutput_np[i, j]:.0f}', ha="center", va="center", color="w", fontsize=6)
 
     # Output from the network
     axs[1].imshow(output_np, cmap='viridis', interpolation='nearest')
-    axs[1].title.set_text('Output de la Red')
+    axs[1].title.set_text('Output')
     for i in range(output_np.shape[0]):
         for j in range(output_np.shape[1]):
             axs[1].text(j, i, f'{output_np[i, j]:.0f}', ha="center", va="center", color="w", fontsize=6)
@@ -813,7 +827,7 @@ def visualizar_valores_pixeles(preoutput, output, target):
     for i in range(target_np.shape[0]):
         for j in range(target_np.shape[1]):
             axs[0].text(j, i, f'{target_np[i, j]:.0f}', ha="center", va="center", color="w", fontsize=6)
-    
+    #plt.savefig('compara.png', dpi=300, bbox_inches='tight')
     plt.show()
 
 count = 0 
@@ -831,10 +845,10 @@ with torch.no_grad():
         outputs = scaler_output.inverse_transform(outputs)
         target = scaler_output.inverse_transform(target)
         preoutputs = scaler_output.inverse_transform(preoutputs)
-        for i in range(5):
+        for i in range(1):
             visualizar_valores_pixeles(preoutputs[i], outputs[i], target[i])
             count += 1
-        if count>= 5: break
+        if count>= 1: break
 # %%
 torch.save(model.state_dict(), 'modelos\ finetuningBueno20.pth')
 
