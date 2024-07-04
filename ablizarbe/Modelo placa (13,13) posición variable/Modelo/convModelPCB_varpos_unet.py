@@ -538,12 +538,8 @@ with torch.no_grad():
         outputs = model(batch, scalar)
         outputs = outputs.view(outputs.size(0),13,13)
 
-        #Añadir criterios de fallo
-        T_interfaces = torch.zeros((target.size(0), 2, 2))
-        T_interfaces[:,0,0], T_interfaces[:,0,1], T_interfaces[:,1,0], T_interfaces[:,1,1] = target[:,0,0], target[:,0,12], target[:,12,0], target[:,12,12]
-
-        outputs_interfaces = torch.zeros((outputs.size(0),2,2))
-        outputs_interfaces[:,0,0], outputs_interfaces[:,0,1], outputs_interfaces[:,1,0], outputs_interfaces[:,1,1] = outputs[:,0,0], outputs[:,0,12], outputs[:,12,0], outputs[:,12,12]
+        outputs = scaler_output.inverse_transform(outputs)
+        target = scaler_output.inverse_transform(target)
 
         loss = criterion(outputs, target)
 
@@ -563,6 +559,20 @@ print(f'Test Loss: {avg_test_loss:.6f}')
 
 import matplotlib.pyplot as plt
 
+plt.style.use('default')
+
+plt.rcParams["figure.figsize"] = (6,4)
+
+#plt.rcParams["font.family"] = "Times New Roman"
+
+plt.rcParams["font.family"] = "lmroman10-regular"
+
+plt.rcParams["font.size"] = 12
+
+plt.rcParams["text.usetex"] = True
+
+plt.rcParams["axes.titlesize"] = 11
+
 model.eval()
 # Función para visualizar el output de la red y el target
 def visualizar_valores_pixeles(output, target):
@@ -577,10 +587,10 @@ def visualizar_valores_pixeles(output, target):
     
     # Output de la red
     axs[1].imshow(output_np, cmap='viridis', interpolation='nearest')
-    axs[1].title.set_text('Output de la Red')
+    axs[1].title.set_text('Output')
     for i in range(output_np.shape[0]):
         for j in range(output_np.shape[1]):
-            text = axs[1].text(j, i, f'{output_np[i, j]:.1f}',
+            text = axs[1].text(j, i, f'{output_np[i, j]:.0f}',
                                ha="center", va="center", color="w", fontsize=6)
 
     # Target
@@ -588,9 +598,36 @@ def visualizar_valores_pixeles(output, target):
     axs[0].title.set_text('Target')
     for i in range(target_np.shape[0]):
         for j in range(target_np.shape[1]):
-            text = axs[0].text(j, i, f'{target_np[i, j]:.1f}',
+            text = axs[0].text(j, i, f'{target_np[i, j]:.0f}',
                                ha="center", va="center", color="w", fontsize=6)
 
+    plt.savefig('unetBu.png', dpi=300, bbox_inches='tight')
+
+    plt.show()
+
+def visualizar_diferencia_pixeles(output, target):
+    # Convertir los tensores a numpy y asegurarse de que están en CPU
+    output_np = output.squeeze().cpu().detach().numpy()
+    target_np = target.squeeze().cpu().detach().numpy()
+    
+    # Calcular la diferencia
+    diferencia_np =np.abs( output_np - target_np)
+    
+    fig, ax = plt.subplots(figsize=(5, 5))
+    
+    # Asegurarse de que las celdas de la grilla sean lo suficientemente grandes para el texto
+    fig.tight_layout(pad=3.0)
+    
+    # Diferencia entre el output de la red y el target
+    cax = ax.imshow(diferencia_np, cmap='viridis', interpolation='nearest')
+    ax.title.set_text('Absolute Error')
+    # for i in range(diferencia_np.shape[0]):
+    #     for j in range(diferencia_np.shape[1]):
+    #         text = ax.text(j, i, f'{diferencia_np[i, j]:.f}',
+    #                        ha="center", va="center", color="w", fontsize=6)
+    
+    fig.colorbar(cax)
+    plt.savefig('unetBu error.png', dpi=300, bbox_inches='tight')
     plt.show()
 
 count = 0 
@@ -605,11 +642,12 @@ with torch.no_grad():
         outputs = model(batch, scalar)
         outputs = scaler_output.inverse_transform(outputs)
         target = scaler_output.inverse_transform(target)
-        print(batch.size())
-        for i in range(5):
+
+        for i in range(1):
             visualizar_valores_pixeles(outputs[i], target[i])
+            visualizar_diferencia_pixeles(outputs[i], target[i])
             count += 1
-        if count>= 5: break
+        if count>= 1: break
         
 
 
