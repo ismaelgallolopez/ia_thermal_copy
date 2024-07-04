@@ -243,7 +243,6 @@ scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=30)
 last_test_loss = np.inf
 
 #%%
-
 ######################################
 ############# TRAIN LOOP #############
 ######################################
@@ -329,7 +328,7 @@ for epoch in range(num_epochs):
 ############# LOAD MODEL #############
 ######################################
 
-model.load_state_dict(torch.load('modelos\modelo_malo.pth'))
+model.load_state_dict(torch.load('modelos\modelo_bueno.pth'))
 model.eval()
 
 # Variables to track losses and the number of batches
@@ -384,20 +383,10 @@ with torch.no_grad():
         outputs = model(batch, scalar)
         outputs = outputs.view(outputs.size(0),13,13)
 
-        #Añadir criterios de fallo
-        T_interfaces = torch.zeros((target.size(0), 2, 2))
-        T_interfaces[:,0,0], T_interfaces[:,0,1], T_interfaces[:,1,0], T_interfaces[:,1,1] = target[:,0,0], target[:,0,12], target[:,12,0], target[:,12,12]
+        outputs = scaler_output.inverse_transform(outputs)
+        target = scaler_output.inverse_transform(target)
 
-        outputs_interfaces = torch.zeros((outputs.size(0),2,2))
-        outputs_interfaces[:,0,0], outputs_interfaces[:,0,1], outputs_interfaces[:,1,0], outputs_interfaces[:,1,1] = outputs[:,0,0], outputs[:,0,12], outputs[:,12,0], outputs[:,12,12]
-
-        T_componentes = torch.zeros((target.size(0),2,2))
-        T_componentes[:,0,0], T_componentes[:,0,1], T_componentes[:,1,0], T_componentes[:,1,1] = target[:,6,3], target[:,6,9], target[:,3,6], target[:,9,6]
-
-        outputs_componentes = torch.zeros((outputs.size(0),2,2))
-        outputs_componentes[:,0,0], outputs_componentes[:,0,1], outputs_componentes[:,1,0], outputs_componentes[:,1,1] = outputs[:,6,3], outputs[:,6,9], outputs[:,3,6], target[:,9,6]
-
-        loss = (criterion(outputs, target) + criterion(outputs_interfaces,T_interfaces) + criterion(outputs_componentes,T_componentes))/3.
+        loss = criterion(outputs, target)
 
         # Accumulate the loss
         total_loss += loss.item()
@@ -408,7 +397,24 @@ avg_test_loss = total_loss / total_batches
 print(f'Test Loss: {avg_test_loss:.6f}')
 
 # %%
+##############################################
+############# MOSTRAR RESULTADOS #############
+##############################################
 import matplotlib.pyplot as plt
+
+plt.style.use('default')
+
+plt.rcParams["figure.figsize"] = (6,4)
+
+#plt.rcParams["font.family"] = "Times New Roman"
+
+plt.rcParams["font.family"] = "lmroman10-regular"
+
+plt.rcParams["font.size"] = 12
+
+plt.rcParams["text.usetex"] = True
+
+plt.rcParams["axes.titlesize"] = 11
 
 model.eval()
 # Función para visualizar el output de la red y el target
@@ -424,7 +430,7 @@ def visualizar_valores_pixeles(output, target):
     
     # Output de la red
     axs[1].imshow(output_np, cmap='viridis', interpolation='nearest')
-    axs[1].title.set_text('Output de la Red')
+    axs[1].title.set_text('Output')
     for i in range(output_np.shape[0]):
         for j in range(output_np.shape[1]):
             text = axs[1].text(j, i, f'{output_np[i, j]:.1f}',
@@ -437,6 +443,8 @@ def visualizar_valores_pixeles(output, target):
         for j in range(target_np.shape[1]):
             text = axs[0].text(j, i, f'{target_np[i, j]:.1f}',
                                ha="center", va="center", color="w", fontsize=6)
+    
+    plt.savefig('completa.png', dpi=300, bbox_inches='tight')
 
     plt.show()
 
@@ -452,10 +460,10 @@ with torch.no_grad():
         outputs = model(batch, scalar)
         outputs = scaler_output.inverse_transform(outputs)
         target = scaler_output.inverse_transform(target)
-        for i in range(5):
+        for i in range(1):
             visualizar_valores_pixeles(outputs[i], target[i])
             count += 1
-        if count>= 5: break
+        if count>= 1: break
         
 
 

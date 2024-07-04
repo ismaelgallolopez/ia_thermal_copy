@@ -114,7 +114,7 @@ scaled_scalar = scaler_scalar.fit_transform(dataset.scalar_dataset)
 scaled_output = scaler_output.fit_transform(dataset.outputs_dataset)
 
 
-#dataset = PCBDataset(scaled_input, scaled_output, scaled_scalar)
+dataset = PCBDataset(scaled_input, scaled_output, scaled_scalar)
 
 # Separando Train and Test
 batch_size = 64
@@ -294,6 +294,9 @@ with torch.no_grad():
         outputs = model(batch, scalar)
         real_target = torch.flatten(real_target, 1)
 
+        real_target = scaler_output.inverse_transform(real_target)
+        outputs = scaler_output.inverse_transform(outputs)
+
         # Compute the loss
         loss = criterion(outputs, real_target)
 
@@ -335,7 +338,7 @@ def visualizar_valores_pixeles(output, target):
     output_np = output.squeeze().cpu().detach().numpy()
     target_np = target.squeeze().cpu().detach().numpy()
     
-    fig, axs = plt.subplots(1, 2, figsize=(10, 5))
+    fig, axs = plt.subplots(1, 2, figsize=(9, 7))
     
     # Asegurarse de que las celdas de la grilla sean lo suficientemente grandes para el texto
     fig.tight_layout(pad=10.0)
@@ -378,13 +381,13 @@ with torch.no_grad():
         
         outputs = outputs.view(-1, 2, 2)
 
-        #outputs = scaler_output.inverse_transform(outputs)
-        #real_target = scaler_output.inverse_transform(real_target)
+        outputs = scaler_output.inverse_transform(outputs)
+        real_target = scaler_output.inverse_transform(real_target)
 
         
         
-        for i in range(5):
+        for i in range(1):
             visualizar_valores_pixeles(outputs[i], real_target[i])
             count += 1
-        if count>= 5: break
+        if count>= 1: break
 # %%

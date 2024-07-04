@@ -290,9 +290,9 @@ for latent_dim in [10,11,15,20]:
 
     #SOLO ACTIVAR PARA ESTUDIOS
     seed = 50
-    #torch.manual_seed(seed) 
-    #torch.cuda.manual_seed(seed)
-    #np.random.seed(seed)
+    torch.manual_seed(seed) 
+    torch.cuda.manual_seed(seed)
+    np.random.seed(seed)
 
     np.random.shuffle(indices)
 
