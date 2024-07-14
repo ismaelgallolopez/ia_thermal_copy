@@ -423,29 +423,49 @@ def visualizar_valores_pixeles(output, target):
     output_np = output.squeeze().cpu().detach().numpy()
     target_np = target.squeeze().cpu().detach().numpy()
     
-    fig, axs = plt.subplots(1, 2, figsize=(10, 5))
+    fig, axs = plt.subplots(1, 3, figsize=(10, 5), gridspec_kw={'width_ratios': [1, 1, 0.06]})
+    
+    # Output de la red
+    im1 = axs[1].imshow(output_np, cmap='viridis', interpolation='nearest')
+    axs[1].title.set_text('Output')
+    
+    # Target
+    im0 = axs[0].imshow(target_np, cmap='viridis', interpolation='nearest')
+    axs[0].title.set_text('Target')
+    
+    # Añadir una sola barra de color para ambas imágenes
+    cbar = fig.colorbar(im1, cax=axs[2], orientation='vertical')
     
     # Asegurarse de que las celdas de la grilla sean lo suficientemente grandes para el texto
     fig.tight_layout(pad=3.0)
     
-    # Output de la red
-    axs[1].imshow(output_np, cmap='viridis', interpolation='nearest')
-    axs[1].title.set_text('Output')
-    for i in range(output_np.shape[0]):
-        for j in range(output_np.shape[1]):
-            text = axs[1].text(j, i, f'{output_np[i, j]:.1f}',
-                               ha="center", va="center", color="w", fontsize=6)
-
-    # Target
-    axs[0].imshow(target_np, cmap='viridis', interpolation='nearest')
-    axs[0].title.set_text('Target')
-    for i in range(target_np.shape[0]):
-        for j in range(target_np.shape[1]):
-            text = axs[0].text(j, i, f'{target_np[i, j]:.1f}',
-                               ha="center", va="center", color="w", fontsize=6)
-    
     plt.savefig('completa.png', dpi=300, bbox_inches='tight')
+    plt.show()
 
+
+def visualizar_diferencia_pixeles(output, target):
+    # Convertir los tensores a numpy y asegurarse de que están en CPU
+    output_np = output.squeeze().cpu().detach().numpy()
+    target_np = target.squeeze().cpu().detach().numpy()
+    
+    # Calcular la diferencia
+    diferencia_np =np.abs( output_np - target_np)
+    
+    fig, ax = plt.subplots(figsize=(5, 5))
+    
+    # Asegurarse de que las celdas de la grilla sean lo suficientemente grandes para el texto
+    fig.tight_layout(pad=3.0)
+    
+    # Diferencia entre el output de la red y el target
+    cax = ax.imshow(diferencia_np, cmap='viridis', interpolation='nearest')
+    ax.title.set_text('Absolute Error')
+    # for i in range(diferencia_np.shape[0]):
+    #     for j in range(diferencia_np.shape[1]):
+    #         text = ax.text(j, i, f'{diferencia_np[i, j]:.f}',
+    #                        ha="center", va="center", color="w", fontsize=6)
+    
+    fig.colorbar(cax)
+    plt.savefig('completa error.png', dpi=300, bbox_inches='tight')
     plt.show()
 
 count = 0 
@@ -462,6 +482,7 @@ with torch.no_grad():
         target = scaler_output.inverse_transform(target)
         for i in range(1):
             visualizar_valores_pixeles(outputs[i], target[i])
+            visualizar_diferencia_pixeles(outputs[i], target[i])
             count += 1
         if count>= 1: break
         
