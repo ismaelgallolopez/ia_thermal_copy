@@ -15,12 +15,11 @@ def posicion_matriz_a_vector(coordenadas, anchura_matriz=13):
     i, j = coordenadas
     return i * anchura_matriz + j
 
-#####################################################################################################
-######################################### PCB_case_1() ##############################################
-#####################################################################################################
+############################################
+############### PCB_case_1() ###############
+############################################
 
-def PCB_case_1(L:float=0.1,thickness:float=0.001,m:int=3,board_k:float=10,ir_emmisivity:float=0.8,
-                    T_interfaces:list=[250,250,250,250],Q_heaters:list=[1.0,1.0,1.0,1.0],Tenv:float=250,display:bool = False, posiciones:list=[(6,3),(3,6),(6,9),(9,6)]):
+def PCB_case_1(L:float=0.1,thickness:float=0.001,m:int=3,board_k:float=10,ir_emmisivity:float=0.8,T_interfaces:list=[250,250,250,250],Q_heaters:list=[1.0,1.0,1.0,1.0],Tenv:float=250,display:bool = False, posiciones:list=[(6,3),(3,6),(6,9),(9,6)]):
     """
     Caso 1. 
     PCB cuadrada de lado L con 4 heaters simétricamente colocados en coordenadas [(L/4,L/2),(L/2,L/4),(3*L/4,L/2),(L/2,3*L/4)]
@@ -55,9 +54,9 @@ def PCB_case_1(L:float=0.1,thickness:float=0.001,m:int=3,board_k:float=10,ir_emm
     return T,interfaces,heaters
 
 
-#####################################################################################################
-######################################### PCB_case_2() ##############################################
-#####################################################################################################
+############################################
+############### PCB_case_2() ###############
+############################################
 
 def PCB_case_2(L:float=0.1,thickness:float=0.001,m:int=3,board_k:float=10,ir_emmisivity:float=0.8,
                     T_interfaces:list=[250,250,250,250],Q_heaters:list=[1.0,1.0,1.0,1.0],Tenv:float=250,display:bool = False):
@@ -96,9 +95,9 @@ def PCB_case_2(L:float=0.1,thickness:float=0.001,m:int=3,board_k:float=10,ir_emm
     
 
 
-#####################################################################################################
-####################################### PCB_solver_main() ###########################################
-#####################################################################################################
+#################################################
+############### PCB_solver_main() ###############
+#################################################
 
 def PCB_solver_main(Lx:float,Ly:float,thickness:float,nx:int,ny:int,board_k:float,ir_emmisivity:float,
                     Tenv:float,interfaces:dict,heaters:dict, display:bool = False, maxiters:int = 1000, objtol:int = 0.01):
@@ -234,7 +233,9 @@ def PCB_solver_main(Lx:float,Ly:float,thickness:float,nx:int,ny:int,board_k:floa
 
 #%%
 
-##########################################CREACIÓN DE LA CLASE########################################
+########################################################
+################# CREACIÓN DE LA CLASE #################
+########################################################
 
 class PCBDataset(Dataset):
     def __init__(self, inputs_dataset, outputs_dataset, scalar_dataset):
@@ -259,9 +260,9 @@ class PCBDataset(Dataset):
 
 #%%
 
-##############################################################
-################# CREACIÓN DEL DATASET #######################
-##############################################################
+########################################################
+################# CREACIÓN DEL DATASET #################
+########################################################
 
 n_entradas = 30000
 nodos_lado = 13
@@ -269,7 +270,7 @@ nodos_lado = 13
 input = []
 output = []
 
-np.random.seed(2)
+#np.random.seed(2)
 
 #Generación de datos aleatorios para el dataset
 potenciasAleatorias = np.random.uniform(0.1, 5, (n_entradas, 4))

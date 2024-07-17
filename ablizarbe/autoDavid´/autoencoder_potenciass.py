@@ -75,10 +75,10 @@ class PartitionedStandardScaler:
         second_part = data[:, 4:]
 
         # Calculate mean and std for both parts
-        self.mean_first_part = first_part.mean(dim=0, keepdim=True)
-        self.std_first_part = first_part.std(dim=0, keepdim=True)
-        self.mean_second_part = second_part.mean(dim=0, keepdim=True)
-        self.std_second_part = second_part.std(dim=0, keepdim=True)
+        self.mean_first_part = torch.mean(first_part)
+        self.std_first_part = torch.std(first_part)
+        self.mean_second_part = torch.mean(second_part)
+        self.std_second_part = torch.std(second_part)
 
     def transform(self, data):
         if self.mean_first_part is None or self.std_first_part is None or \
