@@ -32,7 +32,56 @@ class PCBDataset(Dataset):
         output_data = self.outputs_dataset[idx]
         scalar_data = self.scalar_dataset[idx]
         return input_data, output_data, scalar_data
-    
+
+class PartitionedStandardScaler:
+    def __init__(self):
+        self.mean_first_part = None
+        self.std_first_part = None
+        self.mean_second_part = None
+        self.std_second_part = None
+
+    def fit(self, data):
+        # Ensure data is a tensor with the second dimension being 9
+        if data.shape[1] != 9:
+            raise ValueError("Each sample must be a 9-item vector.")
+
+        # Split data into first part (first 4 items) and second part (last 5 items)
+        first_part = data[:, :4]
+        second_part = data[:, 4:]
+
+        # Calculate mean and std for both parts
+        self.mean_first_part = first_part.mean(dim=0, keepdim=True)
+        self.std_first_part = first_part.std(dim=0, keepdim=True)
+        self.mean_second_part = second_part.mean(dim=0, keepdim=True)
+        self.std_second_part = second_part.std(dim=0, keepdim=True)
+
+    def transform(self, data):
+        if self.mean_first_part is None or self.std_first_part is None or \
+           self.mean_second_part is None or self.std_second_part is None:
+            raise RuntimeError("Scaler has not been fitted with data; please call .fit() first.")
+
+        # Apply normalization separately
+        first_part_transformed = (data[:, :4] - self.mean_first_part) / self.std_first_part
+        second_part_transformed = (data[:, 4:] - self.mean_second_part) / self.std_second_part
+
+        # Concatenate the transformed parts back together
+        return torch.cat((first_part_transformed, second_part_transformed), dim=1)
+
+    def fit_transform(self, data):
+        self.fit(data)
+        return self.transform(data)
+
+    def inverse_transform(self, data):
+        if self.mean_first_part is None or self.std_first_part is None or \
+           self.mean_second_part is None or self.std_second_part is None:
+            raise RuntimeError("Scaler has not been fitted with data; please call .fit() first.")
+
+        # Apply inverse transformation separately
+        first_part_inversed = data[:, :4] * self.std_first_part + self.mean_first_part
+        second_part_inversed = data[:, 4:] * self.std_second_part + self.mean_second_part
+
+        # Concatenate the inversely transformed parts back together
+        return torch.cat((first_part_inversed, second_part_inversed), dim=1)
 
 class StandardScaler3D:
     def __init__(self):
@@ -209,7 +258,7 @@ class LaEnergiaNoAparece(nn.Module):
 dataset = torch.load('PCB_dataset.pth')
 
 #Estandarizar los datos
-scaler_input = StandardScaler3D()
+scaler_input = PartitionedStandardScaler()
 scaler_scalar = GlobalStandardScaler()
 scaler_output = GlobalStandardScaler()
 
@@ -256,7 +305,7 @@ class Encoder(nn.Module):
         self.fc1 = nn.Linear(13*13, 128)
         self.fc2 = nn.Linear(128, 128)
         self.fc3 = nn.Linear(128, 64)
-        self.fc4 = nn.Linear(64, 12)
+        self.fc4 = nn.Linear(64, 11)
 
     def forward(self, x):
         x = F.leaky_relu(self.fc1(x))
@@ -269,7 +318,7 @@ class Encoder(nn.Module):
 class GeneralDecoder(nn.Module):
     def __init__(self):
         super(GeneralDecoder, self).__init__()
-        self.fc1 = nn.Linear(12, 64)
+        self.fc1 = nn.Linear(11, 64)
         self.fc2 = nn.Linear(64, 128)
         self.fc3 = nn.Linear(128, 128)
         self.fc4 = nn.Linear(128, 13*13)
@@ -298,81 +347,43 @@ class ResidualDecoder(nn.Module):
         residual = self.fc4(residual)
         return input + residual  # Sumar el input con el residuo para obtener el output
 
-# Definir el Discriminador para ACD
-class Discriminator(nn.Module):
-    def __init__(self):
-        super(Discriminator, self).__init__()
-        self.conv1 = nn.Conv2d(1, 32, 3, padding=1)
-        self.adaptative_pool = nn.AdaptiveMaxPool2d((8, 8))
-        self.conv2 = nn.Conv2d(32, 64, 3, padding=1)
-        self.conv3 = nn.Conv2d(64, 64, 3, padding=1)
-        self.pool = nn.MaxPool2d(2, 2)
-        self.fc1 = nn.Linear(64*2*2, 128)
-        self.fc2 = nn.Linear(128, 64)
-        self.fc3 = nn.Linear(64, 1)
-
-    def forward(self, x):
-        x = F.leaky_relu(self.conv1(x))
-        x = self.adaptative_pool(x)
-        x = F.leaky_relu(self.conv2(x))
-        x = self.pool(x)
-        x = F.leaky_relu(self.conv3(x))
-        x = self.pool(x)
-        x = torch.flatten(x, 1)
-        x = F.leaky_relu(self.fc1(x))
-        x = F.leaky_relu(self.fc2(x))
-        x = torch.sigmoid(self.fc3(x))
-        return x
-
 # Definir los modelos
 encoder = Encoder()
 general_decoder = GeneralDecoder()
 residual_decoder = ResidualDecoder()
-discriminator = Discriminator()
+
 
 # Definir los optimizadores
-optim_generator = optim.Adam(list(encoder.parameters()) + list(general_decoder.parameters()) + list(residual_decoder.parameters()), lr=0.0001)
-optim_discriminator = optim.Adam(discriminator.parameters(), lr=0.0001)
+optimizer = optim.Adam(list(encoder.parameters()) + list(general_decoder.parameters()) + list(residual_decoder.parameters()), lr=0.0001)
+scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=50)
 
 # Definir las funciones de pérdida
 criterionReconstruction = nn.MSELoss()
-criterionDiscriminator = nn.BCELoss()
 
 last_test_loss = np.inf
 
 #%%
-
 ######################################
 ############# TRAIN LOOP #############
 ######################################
 
 
 # Número de épocas
-num_epochs = 200
+num_epochs = 10
 
 # Ruta para guardar los modelos
-base_path = 'modelos\modelo9_{}.pth'
+base_path = 'modelos\modelo10_{}.pth'
 
 models = {
     "encoder": encoder,
     "generalDecoder": general_decoder,
     "residualDecoder": residual_decoder,
-    "discriminator": discriminator
 }
 
-# Precálculo de etiquetas reales y falsas fuera del bucle de entrenamiento
-real_label = 1
-fake_label = 0
-
-# Suponiendo que batch_size es constante, de lo contrario, ajustar dentro del bucle
-fixed_batch_size = next(iter(train_loader))[2].size(0)
-real_labels = torch.full((fixed_batch_size, 1), real_label, dtype=torch.float)
-fake_labels = torch.full((fixed_batch_size, 1), fake_label, dtype=torch.float)
 
 # Enviar etiquetas al dispositivo correcto, por ejemplo 'cuda' si está disponible
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-real_labels, fake_labels = real_labels.to(device), fake_labels.to(device)
-encoder, general_decoder, residual_decoder, discriminator = encoder.to(device), general_decoder.to(device), residual_decoder.to(device), discriminator.to(device)
+encoder, general_decoder, residual_decoder = encoder.to(device), general_decoder.to(device), residual_decoder.to(device)
 
 for epoch in range(num_epochs):
 
@@ -380,47 +391,31 @@ for epoch in range(num_epochs):
     general_decoder.train()
     residual_decoder.train()
 
+    total_loss = 0
+    num_batches = len(train_loader)
+
     for _, target, _ in train_loader: 
 
         target = target.view(-1, 13*13).to(device)
         batch_size = target.size(0)
         
-        # Asegurar que las etiquetas tienen el tamaño correcto si batch_size varía
-        if batch_size != fixed_batch_size:
-            real_labels = torch.full((batch_size, 1), real_label, dtype=torch.float, device=device)
-            fake_labels = torch.full((batch_size, 1), fake_label, dtype=torch.float, device=device)
-            fixed_batch_size = batch_size
-        
         ### Entrenamiento del generador y encoder
-        optim_generator.zero_grad()
+        optimizer.zero_grad()
         
         encoded = encoder(target)
         general_decoded = general_decoder(encoded)
         residual_decoded = residual_decoder(general_decoded)
         
         gen_loss = criterionReconstruction(residual_decoded, target)
-        validity = discriminator(residual_decoded.view(-1, 1, 13, 13))
-        adversarial_loss = criterionDiscriminator(validity, real_labels)
         
-        g_loss = gen_loss + adversarial_loss
+        g_loss = gen_loss
         g_loss.backward()
-        optim_generator.step()
-        
-        ### Entrenamiento del discriminador
-        optim_discriminator.zero_grad()
-        
-        with torch.no_grad(): 
-            fake_data = residual_decoded.detach()
-        
-        real_pred = discriminator(target.view(-1, 1, 13, 13))
-        d_real_loss = criterionDiscriminator(real_pred, real_labels)
-        
-        fake_pred = discriminator(fake_data.view(-1, 1, 13, 13))
-        d_fake_loss = criterionDiscriminator(fake_pred, fake_labels)
-        
-        d_loss = (d_real_loss + d_fake_loss) / 2
-        d_loss.backward()
-        optim_discriminator.step()
+        optimizer.step()
+        total_loss += g_loss.item()
+    
+    avg_loss = total_loss/num_batches
+    scheduler.step(avg_loss)
+    last_lr = scheduler.optimizer.param_groups[0]['lr']
     
     # Poner los modelos en modo de evaluación
     encoder.eval()
@@ -445,7 +440,7 @@ for epoch in range(num_epochs):
         # Calcular la pérdida promedio
         avg_test_loss = total_loss / len(test_loader)
         
-        print(f"Epoch {epoch+1}/{num_epochs}, Generator Loss: {g_loss.item():.8f}, Discriminator Loss: {d_loss.item():.8f}")
+        print(f"Epoch {epoch+1}/{num_epochs}, Generator Loss: {avg_loss:.8f}, Current LR: {last_lr}")
         
         if avg_test_loss < last_test_loss:
             print("{:.8f} -----> {:.8f}   Saving...".format(last_test_loss,avg_test_loss))
@@ -462,13 +457,12 @@ for epoch in range(num_epochs):
 #######################################
     
 # Cargar los modelos
-base_path = 'modelos\modelo9_{}.pth'
+base_path = 'modelos\modeloBueno_{}.pth'
 
 models = {
     "encoder": encoder,
     "generalDecoder": general_decoder,
     "residualDecoder": residual_decoder,
-    "discriminator": discriminator
 }
 
 for name, model in models.items():
@@ -478,7 +472,7 @@ for name, model in models.items():
 
 # Enviar etiquetas al dispositivo correcto, por ejemplo 'cuda' si está disponible
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-encoder, general_decoder, residual_decoder, discriminator = encoder.to(device), general_decoder.to(device), residual_decoder.to(device), discriminator.to(device)
+encoder, general_decoder, residual_decoder = encoder.to(device), general_decoder.to(device), residual_decoder.to(device)
 
 # Poner los modelos en modo de evaluación
 encoder.eval()
@@ -503,6 +497,8 @@ with torch.no_grad():
     # Calcular la pérdida promedio
     avg_test_loss = total_loss / len(test_loader)
 
+last_test_loss = avg_test_loss
+
 print("Test Loss: {:.8f}".format(avg_test_loss))
 
 #%%
@@ -512,7 +508,7 @@ print("Test Loss: {:.8f}".format(avg_test_loss))
 
 # Enviar etiquetas al dispositivo correcto, por ejemplo 'cuda' si está disponible
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-encoder, general_decoder, residual_decoder, discriminator = encoder.to(device), general_decoder.to(device), residual_decoder.to(device), discriminator.to(device)
+encoder, general_decoder, residual_decoder = encoder.to(device), general_decoder.to(device), residual_decoder.to(device)
 
     
 # Poner los modelos en modo de evaluación
@@ -530,6 +526,9 @@ with torch.no_grad():
         encoded = encoder(target)
         general_decoded = general_decoder(encoded)
         residual_decoded = residual_decoder(general_decoded)
+
+        residual_decoded = scaler_output.inverse_transform(residual_decoded)
+        target = scaler_output.inverse_transform(target)
         
         # Calcular la pérdida
         loss = criterionReconstruction(residual_decoded, target)
@@ -547,9 +546,24 @@ print("Test Loss: {:.8f}".format(avg_test_loss))
 
 import matplotlib.pyplot as plt
 
+
+plt.style.use('default')
+
+plt.rcParams["figure.figsize"] = (6,4)
+
+#plt.rcParams["font.family"] = "Times New Roman"
+
+plt.rcParams["font.family"] = "lmroman10-regular"
+
+plt.rcParams["font.size"] = 12
+
+plt.rcParams["text.usetex"] = True
+
+plt.rcParams["axes.titlesize"] = 11
+
 # Enviar etiquetas al dispositivo correcto, por ejemplo 'cuda' si está disponible
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-encoder, general_decoder, residual_decoder, discriminator = encoder.to(device), general_decoder.to(device), residual_decoder.to(device), discriminator.to(device)
+encoder, general_decoder, residual_decoder = encoder.to(device), general_decoder.to(device), residual_decoder.to(device)
 
 
 encoder.eval()
@@ -569,7 +583,7 @@ def visualizar_valores_pixeles(output, target):
     
     # Output de la red
     axs[1].imshow(output_np, cmap='viridis', interpolation='nearest')
-    axs[1].title.set_text('Output de la Red')
+    axs[1].title.set_text('Output')
     for i in range(output_np.shape[0]):
         for j in range(output_np.shape[1]):
             text = axs[1].text(j, i, f'{output_np[i, j]:.0f}',
@@ -582,7 +596,102 @@ def visualizar_valores_pixeles(output, target):
         for j in range(target_np.shape[1]):
             text = axs[0].text(j, i, f'{target_np[i, j]:.0f}',
                                ha="center", va="center", color="w", fontsize=6)
+            
+    plt.savefig('AutoMLPBueno.png', dpi=300, bbox_inches='tight')
 
+    plt.show()
+
+
+def visualizar_diferencia_pixeles(output, target):
+    # Convertir los tensores a numpy y asegurarse de que están en CPU
+    output_np = output.squeeze().cpu().detach().numpy()
+    target_np = target.squeeze().cpu().detach().numpy()
+    
+    # Calcular la diferencia
+    diferencia_np =np.abs( output_np - target_np)
+    
+    fig, ax = plt.subplots(figsize=(5, 5))
+    
+    # Asegurarse de que las celdas de la grilla sean lo suficientemente grandes para el texto
+    fig.tight_layout(pad=3.0)
+    
+    # Diferencia entre el output de la red y el target
+    cax = ax.imshow(diferencia_np, cmap='viridis', interpolation='nearest')
+    ax.title.set_text('Absolute Error')
+    # for i in range(diferencia_np.shape[0]):
+    #     for j in range(diferencia_np.shape[1]):
+    #         text = ax.text(j, i, f'{diferencia_np[i, j]:.f}',
+    #                        ha="center", va="center", color="w", fontsize=6)
+    
+    fig.colorbar(cax)
+    plt.savefig('AutoMLPError.png', dpi=300, bbox_inches='tight')
+    plt.show()
+
+
+
+count = 0 
+with torch.no_grad(): 
+    for batch, target, scalar in test_loader:
+
+        # Prepare the data and target
+        target = target.view(-1, 13*13).to(device)
+
+        # Pasar los datos por el modelo
+        encoded = encoder(target)
+        general_decoded = general_decoder(encoded)
+        residual_decoded = residual_decoder(general_decoded)
+
+        residual_decoded = residual_decoded.view(-1, 13, 13)
+        target = target.view(-1, 13, 13)
+        
+        # Desescalar los datos
+        outputs = scaler_output.inverse_transform(residual_decoded)
+        target = scaler_output.inverse_transform(target)
+        for i in range(1):
+            visualizar_valores_pixeles(outputs[i], target[i])
+            visualizar_diferencia_pixeles(outputs[i], target[i])
+            count += 1
+        if count>= 1: break
+        
+# %%
+##############################################
+############# MOSTRAR DIFERENCIA #############
+##############################################
+
+import matplotlib.pyplot as plt
+import torch
+
+# Enviar etiquetas al dispositivo correcto, por ejemplo 'cuda' si está disponible
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+encoder, general_decoder, residual_decoder = encoder.to(device), general_decoder.to(device), residual_decoder.to(device)
+
+encoder.eval()
+general_decoder.eval()
+residual_decoder.eval()
+
+# Función para visualizar la diferencia entre el output de la red y el target
+def visualizar_diferencia_pixeles(output, target):
+    # Convertir los tensores a numpy y asegurarse de que están en CPU
+    output_np = output.squeeze().cpu().detach().numpy()
+    target_np = target.squeeze().cpu().detach().numpy()
+    
+    # Calcular la diferencia
+    diferencia_np =np.abs( output_np - target_np)
+    
+    fig, ax = plt.subplots(figsize=(5, 5))
+    
+    # Asegurarse de que las celdas de la grilla sean lo suficientemente grandes para el texto
+    fig.tight_layout(pad=3.0)
+    
+    # Diferencia entre el output de la red y el target
+    cax = ax.imshow(diferencia_np, cmap='viridis', interpolation='nearest')
+    ax.title.set_text('Abolute Error')
+    # for i in range(diferencia_np.shape[0]):
+    #     for j in range(diferencia_np.shape[1]):
+    #         text = ax.text(j, i, f'{diferencia_np[i, j]:.f}',
+    #                        ha="center", va="center", color="w", fontsize=6)
+    
+    fig.colorbar(cax)
     plt.show()
 
 count = 0 
@@ -604,8 +713,8 @@ with torch.no_grad():
         outputs = scaler_output.inverse_transform(residual_decoded)
         target = scaler_output.inverse_transform(target)
         for i in range(5):
-            visualizar_valores_pixeles(outputs[i], target[i])
+            visualizar_diferencia_pixeles(outputs[i], target[i])
             count += 1
-        if count>= 5: break
-        
+        if count >= 5: break
+
 # %%

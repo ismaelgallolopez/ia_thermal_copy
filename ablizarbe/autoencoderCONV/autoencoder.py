@@ -268,245 +268,185 @@ scaled_output = scaler_output.fit_transform(dataset.outputs_dataset)
 dataset = PCBDataset(scaled_input, scaled_output, scaled_scalar)
 
 
-for latent_dim in [10,11,15,20]:
-    print(f"Latent Dim: {latent_dim}")
-    capasmult = 32
-    # Separando Train and Test
-    train_cases = 200
-    test_cases = 1000
 
-    batch_size = 64
-    test_size = 0.1
+capasmult = 32
+# Separando Train and Test
+train_cases = 200
+test_cases = 1000
 
-    #CAMBIAR A GUSTO
-    num_train = test_cases + train_cases 
-    split = int(np.floor(test_cases))
+batch_size = 64
+test_size = 0.1
 
-    #num_train = int(len(dataset)) 
-    #split = int(np.floor(test_size * num_train))
+#CAMBIAR A GUSTO
+num_train = test_cases + train_cases 
+split = int(np.floor(test_cases))
 
-
-    indices = list(range(num_train))
-
-    #SOLO ACTIVAR PARA ESTUDIOS
-    seed = 50
-    torch.manual_seed(seed) 
-    torch.cuda.manual_seed(seed)
-    np.random.seed(seed)
-
-    np.random.shuffle(indices)
-
-    train_idx, test_idx = indices[split:], indices[:split]
-
-    train_sampler = SubsetRandomSampler(train_idx)
-    test_sampler = SubsetRandomSampler(test_idx)
-
-    #Creando los Datalaoders
-    train_loader = DataLoader(dataset, batch_size=batch_size, sampler=train_sampler)
-    test_loader = DataLoader(dataset, batch_size=batch_size, sampler=test_sampler)
-
-    
-    ###################################################
-    ############# ARQUITECTURA DEL MODELO #############
-    ###################################################
+#num_train = int(len(dataset)) 
+#split = int(np.floor(test_size * num_train))
 
 
-    # Definir el Encoder
-    class Encoder(nn.Module):
-        def __init__(self):
-            super(Encoder, self).__init__()
-            self.conv1 = nn.Conv2d(1, 16*capasmult, kernel_size=3, padding=1)
-            self.conv2 = nn.Conv2d(16*capasmult, 32*capasmult, kernel_size=3, padding=1)  
-            self.conv3 = nn.Conv2d(32*capasmult, 16*capasmult, kernel_size=3, padding=1)  
-            self.conv4 = nn.Conv2d(16*capasmult, 4*capasmult, kernel_size=3, padding=1) 
-            self.pool = nn.MaxPool2d(2, 2) 
-            self.adaptativepool = nn.AdaptiveAvgPool2d((8,8))
-            self.linear1 = nn.Linear(4*2*2*capasmult, latent_dim)
+indices = list(range(num_train))
 
-        def forward(self, x):
-            x = F.leaky_relu(self.conv1(x))
-            x = self.adaptativepool(x)
-            x = F.leaky_relu(self.conv2(x))
-            x = self.pool(x)
-            x = F.leaky_relu(self.conv3(x))
-            x = self.pool(x)
-            x = F.leaky_relu(self.conv4(x))
-            x = x.view(-1, 4*2*2*capasmult)
-            x = self.linear1(x)
-            return x
+#SOLO ACTIVAR PARA ESTUDIOS
+seed = 50
+torch.manual_seed(seed) 
+torch.cuda.manual_seed(seed)
+np.random.seed(seed)
 
-    # Definir el Decodificador General (GCD)
-    class GeneralDecoder(nn.Module):
-        def __init__(self):
-            super(GeneralDecoder, self).__init__()
-            self.linear1 = nn.Linear(latent_dim, 4*2*2*capasmult)
-            self.conv1 = nn.Conv2d(4*capasmult, 16*capasmult, kernel_size=3, padding=1)
-            self.conv2 = nn.Conv2d(16*capasmult, 32*capasmult, kernel_size=3, padding=1)
-            self.conv3 = nn.Conv2d(32*capasmult, 16*capasmult, kernel_size=3, padding=1)
-            self.conv4 = nn.Conv2d(16*capasmult, 1, kernel_size=3, padding=1)
-            self.upsampleSpecial = nn.Upsample(size=(13,13), mode='bilinear', align_corners=True)
-            self.up = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
+np.random.shuffle(indices)
 
-        def forward(self, x):
-            x = self.linear1(x)
-            x = x.view(-1, 4*capasmult, 2, 2)
-            x = F.leaky_relu(self.conv1(x))
-            x = self.up(x)
-            x = F.leaky_relu(self.conv2(x))
-            x = self.up(x)
-            x = F.leaky_relu(self.conv3(x))
-            x = self.upsampleSpecial(x)
-            x = self.conv4(x)
-            return x
+train_idx, test_idx = indices[split:], indices[:split]
 
-    # Definir el Decodificador Residual (RCD)
-    class ResidualDecoder(nn.Module):
-        def __init__(self):
-            super(ResidualDecoder, self).__init__()
-            self.conv1 = nn.Conv2d(1, 16*capasmult, kernel_size=3, padding=1)
-            self.conv2 = nn.Conv2d(16*capasmult, 32*capasmult, kernel_size=3, padding=1)
-            self.conv3 = nn.Conv2d(32*capasmult, 16*capasmult, kernel_size=3, padding=1)
-            self.conv4 = nn.Conv2d(16*capasmult, 1, kernel_size=3, padding=1)
+train_sampler = SubsetRandomSampler(train_idx)
+test_sampler = SubsetRandomSampler(test_idx)
 
-        def forward(self, x):
-            input = x
-            residual = F.leaky_relu(self.conv1(x))
-            residual = F.leaky_relu(self.conv2(residual))
-            residual = F.leaky_relu(self.conv3(residual))
-            residual = self.conv4(residual)
-            return input + residual  # Sumar el input con el residuo para obtener el output
+#Creando los Datalaoders
+train_loader = DataLoader(dataset, batch_size=batch_size, sampler=train_sampler)
+test_loader = DataLoader(dataset, batch_size=batch_size, sampler=test_sampler)
 
-    # Definir los modelos
-    encoder = Encoder()
-    general_decoder = GeneralDecoder()
-    residual_decoder = ResidualDecoder()
+#%%
+###################################################
+############# ARQUITECTURA DEL MODELO #############
+###################################################
 
 
-    # Definir los optimizadores
-    optimizer = optim.Adam(list(encoder.parameters()) + list(general_decoder.parameters()) + list(residual_decoder.parameters()), lr=0.0001)
-    scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=20)
+# Definir el Encoder
+class Encoder(nn.Module):
+    def __init__(self):
+        super(Encoder, self).__init__()
+        self.conv1 = nn.Conv2d(1, 16*capasmult, kernel_size=3, padding=1)
+        self.conv2 = nn.Conv2d(16*capasmult, 32*capasmult, kernel_size=3, padding=1)  
+        self.conv3 = nn.Conv2d(32*capasmult, 16*capasmult, kernel_size=3, padding=1)  
+        self.conv4 = nn.Conv2d(16*capasmult, 4*capasmult, kernel_size=3, padding=1) 
+        self.pool = nn.MaxPool2d(2, 2) 
+        self.adaptativepool = nn.AdaptiveAvgPool2d((8,8))
+        self.linear1 = nn.Linear(4*2*2*capasmult, 9)
 
-    # Definir las funciones de pérdida
-    criterionReconstruction = nn.MSELoss()
+    def forward(self, x):
+        x = F.leaky_relu(self.conv1(x))
+        x = self.adaptativepool(x)
+        x = F.leaky_relu(self.conv2(x))
+        x = self.pool(x)
+        x = F.leaky_relu(self.conv3(x))
+        x = self.pool(x)
+        x = F.leaky_relu(self.conv4(x))
+        x = x.view(-1, 4*2*2*capasmult)
+        x = self.linear1(x)
+        return x
 
-    last_test_loss = np.inf
+# Definir el Decodificador General (GCD)
+class GeneralDecoder(nn.Module):
+    def __init__(self):
+        super(GeneralDecoder, self).__init__()
+        self.linear1 = nn.Linear(9, 4*2*2*capasmult)
+        self.conv1 = nn.Conv2d(4*capasmult, 16*capasmult, kernel_size=3, padding=1)
+        self.conv2 = nn.Conv2d(16*capasmult, 32*capasmult, kernel_size=3, padding=1)
+        self.conv3 = nn.Conv2d(32*capasmult, 16*capasmult, kernel_size=3, padding=1)
+        self.conv4 = nn.Conv2d(16*capasmult, 1, kernel_size=3, padding=1)
+        self.upsampleSpecial = nn.Upsample(size=(13,13), mode='bilinear', align_corners=True)
+        self.up = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
+
+    def forward(self, x):
+        x = self.linear1(x)
+        x = x.view(-1, 4*capasmult, 2, 2)
+        x = F.leaky_relu(self.conv1(x))
+        x = self.up(x)
+        x = F.leaky_relu(self.conv2(x))
+        x = self.up(x)
+        x = F.leaky_relu(self.conv3(x))
+        x = self.upsampleSpecial(x)
+        x = self.conv4(x)
+        return x
+
+# Definir el Decodificador Residual (RCD)
+class ResidualDecoder(nn.Module):
+    def __init__(self):
+        super(ResidualDecoder, self).__init__()
+        self.conv1 = nn.Conv2d(1, 16*capasmult, kernel_size=3, padding=1)
+        self.conv2 = nn.Conv2d(16*capasmult, 32*capasmult, kernel_size=3, padding=1)
+        self.conv3 = nn.Conv2d(32*capasmult, 16*capasmult, kernel_size=3, padding=1)
+        self.conv4 = nn.Conv2d(16*capasmult, 1, kernel_size=3, padding=1)
+
+    def forward(self, x):
+        input = x
+        residual = F.leaky_relu(self.conv1(x))
+        residual = F.leaky_relu(self.conv2(residual))
+        residual = F.leaky_relu(self.conv3(residual))
+        residual = self.conv4(residual)
+        return input + residual  # Sumar el input con el residuo para obtener el output
+
+# Definir los modelos
+encoder = Encoder()
+general_decoder = GeneralDecoder()
+residual_decoder = ResidualDecoder()
 
 
-    
-    ######################################
-    ############# TRAIN LOOP #############
-    ######################################
+# Definir los optimizadores
+optimizer = optim.Adam(list(encoder.parameters()) + list(general_decoder.parameters()) + list(residual_decoder.parameters()), lr=0.0001)
+scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=20)
 
-    # Número de épocas
-    num_epochs = 350
+# Definir las funciones de pérdida
+criterionReconstruction = nn.MSELoss()
 
-    # Ruta para guardar los modelos
-    base_path = 'modelos\modeloPru_{}.pth'
-
-    models = {
-        "encoder": encoder,
-        "generalDecoder": general_decoder,
-        "residualDecoder": residual_decoder,
-    }
+last_test_loss = np.inf
 
 
-    # Enviar etiquetas al dispositivo correcto, por ejemplo 'cuda' si está disponible
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    encoder, general_decoder, residual_decoder = encoder.to(device), general_decoder.to(device), residual_decoder.to(device)
+#%%
+######################################
+############# TRAIN LOOP #############
+######################################
 
-    for epoch in range(num_epochs):
+# Número de épocas
+num_epochs = 350
 
-        encoder.train()
-        general_decoder.train()
-        residual_decoder.train()
+# Ruta para guardar los modelos
+base_path = 'modelos\modeloPru_{}.pth'
 
-        total_loss = 0
-        num_batches = len(train_loader)
+models = {
+    "encoder": encoder,
+    "generalDecoder": general_decoder,
+    "residualDecoder": residual_decoder,
+}
 
-        for _, target, _ in train_loader: 
 
-            target = target.view(-1, 1, 13, 13).to(device)  # Asegurándonos que el tensor está en el dispositivo correcto
-            batch_si = target.size(0)
-            
-            ### Entrenamiento del generador y encoder
-            optimizer.zero_grad()
-            
-            encoded = encoder(target)
-            general_decoded = general_decoder(encoded)
-            residual_decoded = residual_decoder(general_decoded)
-            residual_decoded = residual_decoded.view(-1, 13,13)
-            target = target.view(-1, 13, 13)
-            
-            gen_loss = criterionReconstruction(residual_decoded, target)
-            
-            g_loss = gen_loss
-            g_loss.backward()
-            optimizer.step()
-            total_loss += g_loss.item()
+# Enviar etiquetas al dispositivo correcto, por ejemplo 'cuda' si está disponible
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+encoder, general_decoder, residual_decoder = encoder.to(device), general_decoder.to(device), residual_decoder.to(device)
+
+for epoch in range(num_epochs):
+
+    encoder.train()
+    general_decoder.train()
+    residual_decoder.train()
+
+    total_loss = 0
+    num_batches = len(train_loader)
+
+    for _, target, _ in train_loader: 
+
+        target = target.view(-1, 1, 13, 13).to(device)  # Asegurándonos que el tensor está en el dispositivo correcto
+        batch_si = target.size(0)
         
-        avg_loss = total_loss/num_batches
-        scheduler.step(avg_loss)
-        last_lr = scheduler.optimizer.param_groups[0]['lr']
+        ### Entrenamiento del generador y encoder
+        optimizer.zero_grad()
         
-        # Poner los modelos en modo de evaluación
-        encoder.eval()
-        general_decoder.eval()
-        residual_decoder.eval()
-
-        # Desactivar el cálculo de gradientes para la evaluación
-        with torch.no_grad():
-            total_loss = 0
-            for _, target, _ in test_loader:
-                target = target.view(-1, 1, 13, 13).to(device)  # Asegurándonos que el tensor está en el dispositivo correcto
-                
-                # Pasar los datos por el modelo
-                encoded = encoder(target)
-                general_decoded = general_decoder(encoded)
-                residual_decoded = residual_decoder(general_decoded)
-                residual_decoded = residual_decoded.view(-1, 13,13)
-                target = target.view(-1, 13, 13)
-                
-                # Calcular la pérdida
-                loss = criterionReconstruction(residual_decoded, target)
-                total_loss += loss.item()
-                
-            # Calcular la pérdida promedio
-            avg_test_loss = total_loss / len(test_loader)
-            
-            #print(f"Epoch {epoch+1}/{num_epochs}, Generator Loss: {avg_loss:.8f}, Current LR: {last_lr}")
-            
-            if avg_test_loss < last_test_loss:
-                #print("{:.8f} -----> {:.8f}   Saving...".format(last_test_loss,avg_test_loss))
-                for name, model in models.items():
-                    model_path = base_path.format(name)
-                    torch.save(model.state_dict() , model_path)
-                last_test_loss = avg_test_loss
-            
-
-
+        encoded = encoder(target)
+        general_decoded = general_decoder(encoded)
+        residual_decoded = residual_decoder(general_decoded)
+        residual_decoded = residual_decoded.view(-1, 13,13)
+        target = target.view(-1, 13, 13)
+        
+        gen_loss = criterionReconstruction(residual_decoded, target)
+        
+        g_loss = gen_loss
+        g_loss.backward()
+        optimizer.step()
+        total_loss += g_loss.item()
     
-    #######################################
-    ############# LOAD MODEL ##############
-    #######################################
-        
-    # Cargar los modelos
-    base_path = 'modelos\modeloPru_{}.pth'
-
-    models = {
-        "encoder": encoder,
-        "generalDecoder": general_decoder,
-        "residualDecoder": residual_decoder,
-    }
-
-    for name, model in models.items():
-        model_path = base_path.format(name)
-        model.load_state_dict(torch.load(model_path))
-
-
-    # Enviar etiquetas al dispositivo correcto, por ejemplo 'cuda' si está disponible
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    encoder, general_decoder, residual_decoder = encoder.to(device), general_decoder.to(device), residual_decoder.to(device)
-
+    avg_loss = total_loss/num_batches
+    scheduler.step(avg_loss)
+    last_lr = scheduler.optimizer.param_groups[0]['lr']
+    
     # Poner los modelos en modo de evaluación
     encoder.eval()
     general_decoder.eval()
@@ -524,55 +464,114 @@ for latent_dim in [10,11,15,20]:
             residual_decoded = residual_decoder(general_decoded)
             residual_decoded = residual_decoded.view(-1, 13,13)
             target = target.view(-1, 13, 13)
-
+            
             # Calcular la pérdida
             loss = criterionReconstruction(residual_decoded, target)
             total_loss += loss.item()
             
         # Calcular la pérdida promedio
         avg_test_loss = total_loss / len(test_loader)
+        
+        print(f"Epoch {epoch+1}/{num_epochs}, Generator Loss: {avg_loss:.8f}, Current LR: {last_lr}")
+        
+        if avg_test_loss < last_test_loss:
+            print("{:.8f} -----> {:.8f}   Saving...".format(last_test_loss,avg_test_loss))
+            for name, model in models.items():
+                model_path = base_path.format(name)
+                torch.save(model.state_dict() , model_path)
+            last_test_loss = avg_test_loss
+        
 
-    last_test_loss = avg_test_loss
 
-    #print("Test Loss: {:.8f}".format(avg_test_loss))
+#%%
+#######################################
+############# LOAD MODEL ##############
+#######################################
+    
+# Cargar los modelos
+base_path = 'modelos\modeloCONV_{}.pth'
+
+models = {
+    "encoder": encoder,
+    "generalDecoder": general_decoder,
+    "residualDecoder": residual_decoder,
+}
+
+for name, model in models.items():
+    model_path = base_path.format(name)
+    model.load_state_dict(torch.load(model_path))
+
+
+# Enviar etiquetas al dispositivo correcto, por ejemplo 'cuda' si está disponible
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+encoder, general_decoder, residual_decoder = encoder.to(device), general_decoder.to(device), residual_decoder.to(device)
+
+# Poner los modelos en modo de evaluación
+encoder.eval()
+general_decoder.eval()
+residual_decoder.eval()
+
+# Desactivar el cálculo de gradientes para la evaluación
+with torch.no_grad():
+    total_loss = 0
+    for _, target, _ in test_loader:
+        target = target.view(-1, 1, 13, 13).to(device)  # Asegurándonos que el tensor está en el dispositivo correcto
+        
+        # Pasar los datos por el modelo
+        encoded = encoder(target)
+        general_decoded = general_decoder(encoded)
+        residual_decoded = residual_decoder(general_decoded)
+        residual_decoded = residual_decoded.view(-1, 13,13)
+        target = target.view(-1, 13, 13)
+
+        # Calcular la pérdida
+        loss = criterionReconstruction(residual_decoded, target)
+        total_loss += loss.item()
+        
+    # Calcular la pérdida promedio
+    avg_test_loss = total_loss / len(test_loader)
+
+last_test_loss = avg_test_loss
+
+print("Test Loss: {:.8f}".format(avg_test_loss))
+
+#%%
+######################################
+############# TEST LOOP ##############
+######################################
+
+# Enviar etiquetas al dispositivo correcto, por ejemplo 'cuda' si está disponible
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+encoder, general_decoder, residual_decoder = encoder.to(device), general_decoder.to(device), residual_decoder.to(device)
 
     
-    ######################################
-    ############# TEST LOOP ##############
-    ######################################
+# Poner los modelos en modo de evaluación
+encoder.eval()
+general_decoder.eval()
+residual_decoder.eval()
 
-    # Enviar etiquetas al dispositivo correcto, por ejemplo 'cuda' si está disponible
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    encoder, general_decoder, residual_decoder = encoder.to(device), general_decoder.to(device), residual_decoder.to(device)
-
+# Desactivar el cálculo de gradientes para la evaluación
+with torch.no_grad():
+    total_loss = 0
+    for _, target, _ in test_loader:
+        target = target.view(-1,1, 13,13).to(device)  # Asegurándonos que el tensor está en el dispositivo correcto
         
-    # Poner los modelos en modo de evaluación
-    encoder.eval()
-    general_decoder.eval()
-    residual_decoder.eval()
+        # Pasar los datos por el modelo
+        encoded = encoder(target)
+        general_decoded = general_decoder(encoded)
+        residual_decoded = residual_decoder(general_decoded)
+        
+        residual_decoded = scaler_output.inverse_transform(residual_decoded)
+        target = scaler_output.inverse_transform(target)
 
-    # Desactivar el cálculo de gradientes para la evaluación
-    with torch.no_grad():
-        total_loss = 0
-        for _, target, _ in test_loader:
-            target = target.view(-1,1, 13,13).to(device)  # Asegurándonos que el tensor está en el dispositivo correcto
-            
-            # Pasar los datos por el modelo
-            encoded = encoder(target)
-            general_decoded = general_decoder(encoded)
-            residual_decoded = residual_decoder(general_decoded)
-            
-            residual_decoded = scaler_output.inverse_transform(residual_decoded)
-            target = scaler_output.inverse_transform(target)
+        # Calcular la pérdida
+        loss = criterionReconstruction(residual_decoded, target)
+        total_loss += loss.item()
+        
+    # Calcular la pérdida promedio
+    avg_test_loss = total_loss / len(test_loader)
 
-            # Calcular la pérdida
-            loss = criterionReconstruction(residual_decoded, target)
-            total_loss += loss.item()
-            
-        # Calcular la pérdida promedio
-        avg_test_loss = total_loss / len(test_loader)
-
-    print("Test Loss: {:.8f}".format(avg_test_loss))
+print("Test Loss: {:.8f}".format(avg_test_loss))
 
 #%%
 ##############################################
