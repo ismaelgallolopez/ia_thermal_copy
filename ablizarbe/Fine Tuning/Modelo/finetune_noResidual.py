@@ -842,7 +842,7 @@ def visualizar_valores_pixeles(preoutput, output, target):
     for i in range(target_np.shape[0]):
         for j in range(target_np.shape[1]):
             axs[0].text(j, i, f'{target_np[i, j]:.0f}', ha="center", va="center", color="w", fontsize=6)
-    #plt.savefig('compara.png', dpi=300, bbox_inches='tight')
+    plt.savefig('compara.png', dpi=300, bbox_inches='tight')
     plt.show()
 
 count = 0 
