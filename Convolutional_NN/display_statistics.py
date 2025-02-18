@@ -3,7 +3,13 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 
-def display_statistics(model_name:str,finetuning_model_name:str=None):
+def display_statistics(model_name: str, 
+                       finetuning_model_name: str = None,
+                       epochs: int = None,
+                       n_train: int = None,
+                       finetuning: bool = None,
+                       physics: bool = None,
+                       phy_param: float = None):
     
     # Paths de los diferentes directorios
     dir_path = os.path.dirname(os.path.realpath(__file__))
@@ -70,5 +76,7 @@ def display_statistics(model_name:str,finetuning_model_name:str=None):
     plt.show()
     
 
-display_statistics(epochs=250,n_train=100,finetuning=False,physics=False,phy_param=1.0)
+# display_statistics(epochs=250,n_train=100,finetuning=False,physics=False,phy_param=1.0)
+display_statistics(epochs=250, n_train=100, finetuning=False, physics=False, phy_param=1.0, model_name='nombre_del_modelo')
+
     

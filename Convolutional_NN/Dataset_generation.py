@@ -322,6 +322,10 @@ dataset = PCBDataset(T_interfaces,Q_heaters,T_env,output,
                  Q_heaters_std,T_env_mean,T_env_std,output_mean,
                  output_std)
 
+# Define el path del directorio donde se guardarán los datasets
+dataset_dir = os.path.join(dir_path, "Datasets")
+os.makedirs(dataset_dir, exist_ok=True)
+
 print(torch.max(output))
 torch.save(dataset, os.path.join(dir_path,"Datasets",'PCB_dataset.pth'))
 torch.save(dataset_test, os.path.join(dir_path,"Datasets",'PCB_dataset_test.pth'))
