@@ -14,7 +14,8 @@ def train(model, loader, optimizer, device):
         data = data.to(device)
         optimizer.zero_grad()
         out = model(data.x, data.edge_index)
-        loss = F.mse_loss(out.squeeze(), data.y)
+        out = out.view(-1)  # Aplana el tensor de (5408, 1) a (5408)
+        loss = F.mse_loss(out, data.y)
         loss.backward()
         optimizer.step()
         total_loss += loss.item() * data.num_graphs
@@ -30,8 +31,9 @@ def evaluate(model, loader, device):
         for data in loader:
             data = data.to(device)
             out = model(data.x, data.edge_index)
+            out = out.view(-1)  # Aplana el tensor de (5408, 1) a (5408)
             true_vals.append(data.y.cpu())
-            pred_vals.append(out.squeeze().cpu())
+            pred_vals.append(out.cpu())
 
     true_vals = torch.cat(true_vals, dim=0)
     pred_vals = torch.cat(pred_vals, dim=0)
