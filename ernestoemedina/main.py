@@ -3,6 +3,7 @@
 
 import torch
 from torch_geometric.loader import DataLoader
+from Dataset_loader import PCBDataset  # Asegúrate que Dataset_loader se encuentra en el mismo directorio
 from gcn_model import GCN
 from data_loader import load_pcb_dataset
 from train_eval import train, evaluate
