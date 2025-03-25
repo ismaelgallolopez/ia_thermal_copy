@@ -20,8 +20,8 @@ def load_pcb_dataset(file_path):
         sample_input, sample_output, sample_scalar = dataset[i]
 
         # Extraer las matrices de potencias e interfaces
-        potencias = sample_input[0].flatten()  # Convertimos la matriz a un vector
-        nodal_features = potencias.unsqueeze(1)  # Añadimos una dimensión extra para que sea compatible con la GCN (num_nodos, 1)
+        potencias = sample_input[0].flatten().unsqueeze(1)  # Convertimos la matriz (num_nodos,1)
+        nodal_features = potencias
 
         # El target son las temperaturas de cada nodo
         target = sample_output.flatten()  # (num_nodos,)
