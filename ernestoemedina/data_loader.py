@@ -21,7 +21,7 @@ def load_pcb_dataset(file_path):
 
         # Extraer las matrices de potencias e interfaces
         potencias = sample_input[0].flatten()  # Convertimos la matriz a un vector
-        nodal_features = torch.stack([potencias, interfaces], dim=1)  # (num_nodos, 2)
+        nodal_features = potencias.unsqueeze(1)  # Añadimos una dimensión extra para que sea compatible con la GCN (num_nodos, 1)
 
         # El target son las temperaturas de cada nodo
         target = sample_output.flatten()  # (num_nodos,)
