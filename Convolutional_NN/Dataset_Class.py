@@ -57,6 +57,7 @@ class PCBDataset(Dataset):
         output_data = self.outputs[idx]
         return input_data, output_data
     
-    def to_cuda(self):
-        self.inputs = self.inputs.to('cuda')
-        self.outputs = self.outputs.to('cuda')
+    def to_device(self):
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.inputs = self.inputs.to(device)
+        self.outputs = self.outputs.to(device)
