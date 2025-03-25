@@ -3,7 +3,7 @@
 
 import torch
 from torch_geometric.loader import DataLoader
-from model import GCN
+from gcn_model import GCN
 from data_loader import load_pcb_dataset
 from train_eval import train, evaluate
 import os
@@ -14,6 +14,8 @@ def main():
     file_path = 'PCB_dataset.pth'  # Ruta al archivo de dataset
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
+    
+    
     # Mensaje de inicio
     print("Iniciando el script...")  
     print(f"Usando dispositivo: {device}")

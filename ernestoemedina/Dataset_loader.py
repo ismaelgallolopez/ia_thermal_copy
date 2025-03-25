@@ -1,6 +1,8 @@
 import torch
 from torch.utils.data import Dataset
 
+#Este archivo se encarga de preparar la clase PCBDataset y la función load_dataset para cargar el dataset PCB_dataset.pth.
+
 class PCBDataset(Dataset):  # <-- Asegúrate que esta clase esté definida aquí
     def __init__(self, inputs_dataset, outputs_dataset, scalar_dataset):
         assert len(inputs_dataset) == len(outputs_dataset) == len(scalar_dataset), "All datasets must be of the same size"
