@@ -48,8 +48,10 @@ def UNET_train(epochs:int,n_train:int=1000,batch_size:int=5,lr0:float=0.0001,ove
         os.mkdir(os.path.join(folder_path,'Results'))
 
     # Importación de los dataset de train y test.
-    dataset_test:PCBDataset = torch.load(os.path.join(dataset_path,'PCB_dataset_test.pth'),weights_only=False)
-    dataset_train:PCBDataset = torch.load(os.path.join(dataset_path,'PCB_dataset_train.pth'),weights_only=False)
+    # dataset_test:PCBDataset = torch.load(os.path.join(dataset_path,'PCB_dataset_test.pth'),weights_only=False)
+    # dataset_train:PCBDataset = torch.load(os.path.join(dataset_path,'PCB_dataset_train.pth'),weights_only=False)
+    dataset_test:PCBDataset = torch.load(os.path.join(dataset_path,'PCB_dataset_test.pth'))
+    dataset_train:PCBDataset = torch.load(os.path.join(dataset_path,'PCB_dataset_train.pth'))
 
     dataset_train.to_cuda()
     dataset_test.to_cuda()

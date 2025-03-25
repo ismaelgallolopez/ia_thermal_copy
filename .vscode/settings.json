@@ -1,3 +1,13 @@
 {
-    "git.ignoreLimitWarning": true
+    "git.ignoreLimitWarning": true,
+    "python.defaultInterpreterPath": "ismael_minimal",
+    "terminal.integrated.env.windows": {
+        "KMP_DUPLICATE_LIB_OK": "TRUE",
+        "OMP_NUM_THREADS": "1"
+    },
+    "python.envFile": "${workspaceFolder}/.env",
+    "python.defaultInterpreterPath": "${workspaceFolder}/ismael_minimal",
+    "python.analysis.extraPaths": [
+        "./Convolutional_NN"
+    ]
 }
