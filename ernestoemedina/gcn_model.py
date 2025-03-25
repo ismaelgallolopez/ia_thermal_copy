@@ -2,6 +2,7 @@
 # Este módulo define la arquitectura de la Graph Convolutional Network (GCN).
 import torch
 import torch.nn.functional as F
+from Dataset_loader import PCBDataset  # Asegúrate que Dataset_loader se encuentra en el mismo directorio
 from torch_geometric.nn import GCNConv
 from torch.nn import Linear, ModuleList
 

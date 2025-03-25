@@ -4,6 +4,8 @@
 import torch
 from torch_geometric.data import Data
 import numpy as np
+from Dataset_loader import PCBDataset
+
 
 
 def load_pcb_dataset(file_path):
