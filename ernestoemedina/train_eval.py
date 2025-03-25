@@ -14,7 +14,7 @@ def train(model, loader, optimizer, device):
         data = data.to(device)
         optimizer.zero_grad()
         out = model(data.x, data.edge_index)
-        loss = F.mse_loss(out, data.y)
+        loss = F.mse_loss(out.squeeze(), data.y)
         loss.backward()
         optimizer.step()
         total_loss += loss.item() * data.num_graphs
@@ -31,7 +31,7 @@ def evaluate(model, loader, device):
             data = data.to(device)
             out = model(data.x, data.edge_index)
             true_vals.append(data.y.cpu())
-            pred_vals.append(out.cpu())
+            pred_vals.append(out.squeeze().cpu())
 
     true_vals = torch.cat(true_vals, dim=0)
     pred_vals = torch.cat(pred_vals, dim=0)
