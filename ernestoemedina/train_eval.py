@@ -72,37 +72,41 @@ def evaluate(model, loader, device, error_threshold=5.0, plot_results=True):
 
 def plot_maps(true_vals, pred_vals):
     total_nodos = true_vals.shape[0]
-    
-    # Determinar el tamaño de la malla automáticamente
-    nodos_lado = int(np.sqrt(total_nodos))  # Calcula automáticamente el tamaño de la malla
 
-    if nodos_lado ** 2 != total_nodos:
-        raise ValueError(f"El número de nodos ({total_nodos}) no forma un cuadrado perfecto. ¿Es un batch parcial?")
+    # Calcular el tamaño de la malla para el target
+    nodos_lado_target = int(np.sqrt(total_nodos))  # Asumiendo que el target es siempre un cuadrado perfecto
+    
+    if nodos_lado_target ** 2 != total_nodos:
+        raise ValueError(f"El número de nodos del target ({total_nodos}) no forma un cuadrado perfecto.")
+    
+    # Recortar las predicciones si tienen más nodos que el target
+    if pred_vals.shape[0] > total_nodos:
+        pred_vals = pred_vals[:total_nodos]
     
     # Transformar a matrices 2D con el tamaño detectado
-    true_vals = true_vals.numpy().reshape(nodos_lado, nodos_lado)
-    pred_vals = pred_vals.numpy().reshape(nodos_lado, nodos_lado)
+    true_vals = true_vals.numpy().reshape(nodos_lado_target, nodos_lado_target)
+    pred_vals = pred_vals.numpy().reshape(nodos_lado_target, nodos_lado_target)
 
     # Calcular el error relativo (en %)
     error_relative = np.abs((pred_vals - true_vals) / true_vals) * 100
-    
+
     fig, axes = plt.subplots(1, 3, figsize=(18, 6))
-    
+
     # Mapa del Target
     im1 = axes[0].imshow(true_vals, cmap='jet')
     axes[0].set_title("Mapa del Target (Temperaturas Reales)")
     fig.colorbar(im1, ax=axes[0])
-    
+
     # Mapa Predicho
     im2 = axes[1].imshow(pred_vals, cmap='jet')
     axes[1].set_title("Mapa Predicho por la GCN (Temperaturas Predichas)")
     fig.colorbar(im2, ax=axes[1])
-    
+
     # Mapa de Error Relativo
     im3 = axes[2].imshow(error_relative, cmap='jet')
     axes[2].set_title("Mapa del Error Relativo (%)")
     fig.colorbar(im3, ax=axes[2])
-    
+
     plt.show()
 
 
