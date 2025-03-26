@@ -10,23 +10,32 @@ from torch_geometric.loader import DataLoader
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 
 
+# Train
 def train(model, loader, optimizer, device):
+    global target_mean, target_std
     model.train()
     total_loss = 0
 
     for data in loader:
         data = data.to(device)
         optimizer.zero_grad()
+        
         out = model(data.x, data.edge_index)
-        out = out.view(-1)  # Aplana el tensor de (5408, 1) a (5408)
-        loss = F.mse_loss(out, data.y)
+        out = out.view(-1)
+        
+        true_vals = data.y  # Ya está estandarizado
+
+        loss = F.mse_loss(out, true_vals)
         loss.backward()
         optimizer.step()
         total_loss += loss.item() * data.num_graphs
 
     return total_loss / len(loader.dataset)
 
-def evaluate(model, loader, device, nodos_por_grafico=None, error_threshold=5.0, plot_results=True):
+
+# Evaluate
+def evaluate(model, loader, device, nodos_por_grafico=None, error_threshold=5.0, plot_results=True, normalize=True):
+    global target_mean, target_std
     model.eval()
     all_mse, all_mae, all_r2, all_accuracy = [], [], [], []
     all_true_vals, all_pred_vals = [], []
@@ -39,57 +48,48 @@ def evaluate(model, loader, device, nodos_por_grafico=None, error_threshold=5.0,
 
             true_batch = data.y.cpu()
             pred_batch = out.cpu()
+            
+            # Desnormalizar para graficar o calcular métricas sin normalización
+            if not normalize:
+                true_batch = true_batch * target_std + target_mean
+                pred_batch = pred_batch * target_std + target_mean
 
-            # Número total de nodos en el batch actual
             total_nodos = true_batch.shape[0]
-            
-            if nodos_por_grafico is None:
-                # Si no se especifica nodos_por_grafico, se intenta detectar automáticamente
-                posibles_nodos_por_grafico = [i for i in range(1, total_nodos + 1) 
-                                              if total_nodos % i == 0 and int(np.sqrt(i))**2 == i]
-                if len(posibles_nodos_por_grafico) == 0:
-                    raise ValueError(f"No se encontró un tamaño válido de gráfico para el total de nodos {total_nodos}")
-                nodos_por_grafico = max(posibles_nodos_por_grafico)  # Seleccionar el mayor cuadrado perfecto
-            
-            # Verificar que sea divisible entre el número de nodos por gráfico proporcionado
+
             if total_nodos % nodos_por_grafico != 0:
                 raise ValueError(f"El número total de nodos ({total_nodos}) no es divisible por nodos_por_grafico ({nodos_por_grafico}).")
             
-            # Dividir en gráficos individuales
             true_vals_dividido = torch.split(true_batch, nodos_por_grafico)
             pred_vals_dividido = torch.split(pred_batch, nodos_por_grafico)
             
             for true_vals, pred_vals in zip(true_vals_dividido, pred_vals_dividido):
                 
-                # Calcular métricas para cada gráfico individual
                 mse = mean_squared_error(true_vals, pred_vals)
                 mae = mean_absolute_error(true_vals, pred_vals)
                 r2 = r2_score(true_vals, pred_vals)
                 within_threshold = torch.abs(true_vals - pred_vals) <= error_threshold
                 accuracy_within_threshold = torch.sum(within_threshold.float()).item() / len(true_vals) * 100
 
-                # Guardar métricas calculadas
                 all_mse.append(mse)
                 all_mae.append(mae)
                 all_r2.append(r2)
                 all_accuracy.append(accuracy_within_threshold)
                 
-                # Guardar gráficos individuales
                 all_true_vals.append(true_vals)
                 all_pred_vals.append(pred_vals)
 
-    # Seleccionar un gráfico al azar para graficar
     if plot_results and len(all_true_vals) > 0:
         idx = random.randint(0, len(all_true_vals) - 1)
         plot_temperature_maps(all_true_vals[idx], all_pred_vals[idx])
         
-    # Calcular métricas promedio para todo el DataLoader
     mean_mse = np.mean(all_mse)
     mean_mae = np.mean(all_mae)
     mean_r2 = np.mean(all_r2)
     mean_accuracy = np.mean(all_accuracy)
 
     return mean_mse, mean_mae, mean_r2, mean_accuracy
+
+
 
 
 def plot_temperature_maps(true_vals, pred_vals):
@@ -127,12 +127,12 @@ def plot_temperature_maps(true_vals, pred_vals):
 
     # Mapa del Target (Temperaturas Reales)
     im1 = axes[0].imshow(true_vals, cmap='jet')
-    axes[0].set_title("Mapa del Target (Temperaturas Reales)")
+    axes[0].set_title("Temperaturas Reales (Target) (K)")
     fig.colorbar(im1, ax=axes[0])
 
     # Mapa de la Predicción (Temperaturas Predichas)
     im2 = axes[1].imshow(pred_vals, cmap='jet')
-    axes[1].set_title("Mapa de la Predicción (Temperaturas Predichas)")
+    axes[1].set_title("Temperaturas Predichas (K)")
     fig.colorbar(im2, ax=axes[1])
 
     # Mapa del Error Absoluto en Kelvin
@@ -155,3 +155,23 @@ def predict(model, loader, device):
             predictions.append(out.cpu())
 
     return torch.cat(predictions, dim=0)
+
+# Variables globales para guardar media y desviación estándar
+target_mean = None
+target_std = None
+
+def standardize_data(graphs):
+    """
+    Estandariza automáticamente las temperaturas target en un conjunto de gráficos
+    y guarda la media y desviación estándar globalmente.
+    """
+    global target_mean, target_std
+
+    all_targets = torch.cat([graph.y for graph in graphs])
+    target_mean = all_targets.mean()
+    target_std = all_targets.std()
+    
+    for graph in graphs:
+        graph.y = (graph.y - target_mean) / target_std  # Estandarización de la temperatura target
+    
+    return graphs
