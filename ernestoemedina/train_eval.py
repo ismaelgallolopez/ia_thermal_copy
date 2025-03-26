@@ -44,7 +44,7 @@ def evaluate(model, loader, device, nodos_por_grafico=None, error_threshold=5.0,
             total_nodos = true_batch.shape[0]
             
             if nodos_por_grafico is None:
-                # Intentar determinar cuántos gráficos hay en este batch
+                # Si no se especifica nodos_por_grafico, se intenta detectar automáticamente
                 posibles_nodos_por_grafico = [i for i in range(1, total_nodos + 1) 
                                               if total_nodos % i == 0 and int(np.sqrt(i))**2 == i]
                 if len(posibles_nodos_por_grafico) == 0:
