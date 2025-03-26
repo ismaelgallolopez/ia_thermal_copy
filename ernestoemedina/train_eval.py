@@ -34,7 +34,8 @@ def train(model, loader, optimizer, device):
 
 
 # Evaluate
-def evaluate(model, loader, device, nodos_por_grafico=None, error_threshold=5.0, plot_results=True, normalize=True):
+def evaluate(model, loader, device, nodos_por_grafico=None, error_threshold=5.0, 
+             plot_results=True, normalize=True):
     global target_mean, target_std
     model.eval()
     all_mse, all_mae, all_r2, all_accuracy = [], [], [], []
@@ -49,7 +50,7 @@ def evaluate(model, loader, device, nodos_por_grafico=None, error_threshold=5.0,
             true_batch = data.y.cpu()
             pred_batch = out.cpu()
             
-            # Desnormalizar para graficar o calcular métricas sin normalización
+            # Si se solicita desnormalización, se aplica a ambos
             if not normalize:
                 true_batch = true_batch * target_std + target_mean
                 pred_batch = pred_batch * target_std + target_mean
@@ -59,15 +60,26 @@ def evaluate(model, loader, device, nodos_por_grafico=None, error_threshold=5.0,
             if total_nodos % nodos_por_grafico != 0:
                 raise ValueError(f"El número total de nodos ({total_nodos}) no es divisible por nodos_por_grafico ({nodos_por_grafico}).")
             
+            # Dividir en gráficos individuales
             true_vals_dividido = torch.split(true_batch, nodos_por_grafico)
             pred_vals_dividido = torch.split(pred_batch, nodos_por_grafico)
             
             for true_vals, pred_vals in zip(true_vals_dividido, pred_vals_dividido):
                 
-                mse = mean_squared_error(true_vals, pred_vals)
-                mae = mean_absolute_error(true_vals, pred_vals)
-                r2 = r2_score(true_vals, pred_vals)
-                within_threshold = torch.abs(true_vals - pred_vals) <= error_threshold
+                # Calcular métricas en la escala correcta
+                if normalize:
+                    # Métricas sobre datos normalizados
+                    mse = mean_squared_error(true_vals, pred_vals)
+                    mae = mean_absolute_error(true_vals, pred_vals)
+                    r2 = r2_score(true_vals, pred_vals)
+                    within_threshold = torch.abs(true_vals - pred_vals) <= (error_threshold / target_std)
+                else:
+                    # Métricas sobre datos desnormalizados
+                    mse = mean_squared_error(true_vals, pred_vals)
+                    mae = mean_absolute_error(true_vals, pred_vals)
+                    r2 = r2_score(true_vals, pred_vals)
+                    within_threshold = torch.abs(true_vals - pred_vals) <= error_threshold
+                
                 accuracy_within_threshold = torch.sum(within_threshold.float()).item() / len(true_vals) * 100
 
                 all_mse.append(mse)
@@ -88,6 +100,7 @@ def evaluate(model, loader, device, nodos_por_grafico=None, error_threshold=5.0,
     mean_accuracy = np.mean(all_accuracy)
 
     return mean_mse, mean_mae, mean_r2, mean_accuracy
+
 
 
 
@@ -144,17 +157,50 @@ def plot_temperature_maps(true_vals, pred_vals):
 
 
 
-def predict(model, loader, device):
+def predict(model, loader, device, nodos_por_grafico=None, normalize=True):
+    """
+    Genera predicciones con un modelo GCN utilizando datos sin target.
+    
+    Args:
+        model (torch.nn.Module): El modelo GCN entrenado.
+        loader (DataLoader): DataLoader con las condiciones de contorno.
+        device (torch.device): Dispositivo para evaluar el modelo (CPU o GPU).
+        nodos_por_grafico (int): Número total de nodos por cada gráfico (debe ser conocido de antemano).
+        normalize (bool): Indica si las predicciones deben ser devueltas en su forma normalizada o desnormalizada.
+        
+    Returns:
+        list: Lista de predicciones individuales por gráfico.
+    """
+    global target_mean, target_std
     model.eval()
-    predictions = []
+    all_pred_vals = []
 
     with torch.no_grad():
         for data in loader:
             data = data.to(device)
             out = model(data.x, data.edge_index)
-            predictions.append(out.cpu())
+            out = out.view(-1)
+            
+            if not normalize:
+                # Desnormalizar la predicción si se solicita
+                out = out * target_std + target_mean
 
-    return torch.cat(predictions, dim=0)
+            # Dividir las predicciones en gráficos individuales
+            total_nodos = out.shape[0]
+
+            if nodos_por_grafico is None:
+                raise ValueError("Debe especificarse el argumento 'nodos_por_grafico' para dividir correctamente las predicciones.")
+
+            if total_nodos % nodos_por_grafico != 0:
+                raise ValueError(f"El número total de nodos ({total_nodos}) no es divisible por nodos_por_grafico ({nodos_por_grafico}).")
+
+            pred_vals_dividido = torch.split(out.cpu(), nodos_por_grafico)
+            
+            for pred_vals in pred_vals_dividido:
+                all_pred_vals.append(pred_vals)
+    
+    return all_pred_vals  # Devolver las predicciones individuales por gráfico
+
 
 # Variables globales para guardar media y desviación estándar
 target_mean = None
