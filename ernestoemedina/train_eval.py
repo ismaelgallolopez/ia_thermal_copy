@@ -40,27 +40,41 @@ def evaluate(model, loader, device, error_threshold=5.0, plot_results=True):
             true_batch = data.y.cpu()
             pred_batch = out.cpu()
 
-            # Calcular métricas para este batch
-            mse = mean_squared_error(true_batch, pred_batch)
-            mae = mean_absolute_error(true_batch, pred_batch)
-            r2 = r2_score(true_batch, pred_batch)
-            within_threshold = torch.abs(true_batch - pred_batch) <= error_threshold
-            accuracy_within_threshold = torch.sum(within_threshold.float()).item() / len(true_batch) * 100
+            # Número total de nodos
+            total_nodos = true_batch.shape[0]
+            nodos_por_grafico = int(np.sqrt(total_nodos))
             
-            all_mse.append(mse)
-            all_mae.append(mae)
-            all_r2.append(r2)
-            all_accuracy.append(accuracy_within_threshold)
+            if nodos_por_grafico ** 2 != total_nodos:
+                raise ValueError(f"El número total de nodos ({total_nodos}) no forma un cuadrado perfecto.")
+
+            # Dividir en gráficos individuales
+            num_graficos = total_nodos // (nodos_por_grafico ** 2)
+            true_vals_dividido = torch.split(true_batch, nodos_por_grafico ** 2)
+            pred_vals_dividido = torch.split(pred_batch, nodos_por_grafico ** 2)
             
-            # Guardar los gráficos para luego seleccionar uno
-            all_true_vals.append(true_batch)
-            all_pred_vals.append(pred_batch)
-    
+            for true_vals, pred_vals in zip(true_vals_dividido, pred_vals_dividido):
+                
+                # Calcular métricas para cada gráfico individual
+                mse = mean_squared_error(true_vals, pred_vals)
+                mae = mean_absolute_error(true_vals, pred_vals)
+                r2 = r2_score(true_vals, pred_vals)
+                within_threshold = torch.abs(true_vals - pred_vals) <= error_threshold
+                accuracy_within_threshold = torch.sum(within_threshold.float()).item() / len(true_vals) * 100
+
+                # Guardar métricas calculadas
+                all_mse.append(mse)
+                all_mae.append(mae)
+                all_r2.append(r2)
+                all_accuracy.append(accuracy_within_threshold)
+                
+                # Guardar gráficos individuales
+                all_true_vals.append(true_vals)
+                all_pred_vals.append(pred_vals)
+
     # Seleccionar un gráfico al azar para graficar
     if plot_results and len(all_true_vals) > 0:
         idx = random.randint(0, len(all_true_vals) - 1)
         plot_temperature_maps(all_true_vals[idx], all_pred_vals[idx])
-        
     # Calcular métricas promedio para todo el DataLoader
     mean_mse = np.mean(all_mse)
     mean_mae = np.mean(all_mae)
