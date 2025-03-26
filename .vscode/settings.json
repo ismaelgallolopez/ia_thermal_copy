@@ -9,5 +9,6 @@
     "python.defaultInterpreterPath": "${workspaceFolder}/ismael_minimal",
     "python.analysis.extraPaths": [
         "./Convolutional_NN"
-    ]
+    ],
+    "jupyter.themeMatplotlibPlots": true
 }
