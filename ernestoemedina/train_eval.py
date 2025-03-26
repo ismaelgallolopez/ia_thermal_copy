@@ -26,7 +26,7 @@ def train(model, loader, optimizer, device):
 
     return total_loss / len(loader.dataset)
 
-def evaluate(model, loader, device, nodos_por_grafico, error_threshold=5.0, plot_results=True):
+def evaluate(model, loader, device, nodos_por_grafico=None, error_threshold=5.0, plot_results=True):
     model.eval()
     all_mse, all_mae, all_r2, all_accuracy = [], [], [], []
     all_true_vals, all_pred_vals = [], []
@@ -42,7 +42,15 @@ def evaluate(model, loader, device, nodos_por_grafico, error_threshold=5.0, plot
 
             # Número total de nodos en el batch actual
             total_nodos = true_batch.shape[0]
-
+            
+            if nodos_por_grafico is None:
+                # Intentar determinar cuántos gráficos hay en este batch
+                posibles_nodos_por_grafico = [i for i in range(1, total_nodos + 1) 
+                                              if total_nodos % i == 0 and int(np.sqrt(i))**2 == i]
+                if len(posibles_nodos_por_grafico) == 0:
+                    raise ValueError(f"No se encontró un tamaño válido de gráfico para el total de nodos {total_nodos}")
+                nodos_por_grafico = max(posibles_nodos_por_grafico)  # Seleccionar el mayor cuadrado perfecto
+            
             # Verificar que sea divisible entre el número de nodos por gráfico proporcionado
             if total_nodos % nodos_por_grafico != 0:
                 raise ValueError(f"El número total de nodos ({total_nodos}) no es divisible por nodos_por_grafico ({nodos_por_grafico}).")
