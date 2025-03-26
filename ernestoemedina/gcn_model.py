@@ -20,7 +20,6 @@ class GCN(torch.nn.Module):
         self.convs.append(GCNConv(hidden_dim, output_dim))  # Última capa
 
     def forward(self, x, edge_index):
-        print(f"Entrada GCN (x): {x.shape}")  # Depuración
         for i, conv in enumerate(self.convs):
             x = conv(x, edge_index)
             if i < self.num_layers - 1:
