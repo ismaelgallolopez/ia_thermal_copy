@@ -72,15 +72,18 @@ def evaluate(model, loader, device, error_threshold=5.0, plot_results=True):
 
 def plot_maps(true_vals, pred_vals):
     total_nodos = true_vals.shape[0]
+    
+    # Determinar el tamaño de la malla automáticamente
     nodos_lado = int(np.sqrt(total_nodos))  # Calcula automáticamente el tamaño de la malla
 
     if nodos_lado ** 2 != total_nodos:
         raise ValueError(f"El número de nodos ({total_nodos}) no forma un cuadrado perfecto. ¿Es un batch parcial?")
-
+    
+    # Transformar a matrices 2D con el tamaño detectado
     true_vals = true_vals.numpy().reshape(nodos_lado, nodos_lado)
     pred_vals = pred_vals.numpy().reshape(nodos_lado, nodos_lado)
 
-    # Error relativo (en %)
+    # Calcular el error relativo (en %)
     error_relative = np.abs((pred_vals - true_vals) / true_vals) * 100
     
     fig, axes = plt.subplots(1, 3, figsize=(18, 6))
@@ -101,6 +104,7 @@ def plot_maps(true_vals, pred_vals):
     fig.colorbar(im3, ax=axes[2])
     
     plt.show()
+
 
 
 def predict(model, loader, device):
