@@ -26,7 +26,7 @@ def train(model, loader, optimizer, device):
 
     return total_loss / len(loader.dataset)
 
-def evaluate(model, loader, device, error_threshold=5.0, plot_results=True):
+def evaluate(model, loader, device, nodos_por_grafico, error_threshold=5.0, plot_results=True):
     model.eval()
     all_mse, all_mae, all_r2, all_accuracy = [], [], [], []
     all_true_vals, all_pred_vals = [], []
@@ -40,17 +40,16 @@ def evaluate(model, loader, device, error_threshold=5.0, plot_results=True):
             true_batch = data.y.cpu()
             pred_batch = out.cpu()
 
-            # Número total de nodos
+            # Número total de nodos en el batch actual
             total_nodos = true_batch.shape[0]
-            nodos_por_grafico = int(np.sqrt(total_nodos))
-            
-            if nodos_por_grafico ** 2 != total_nodos:
-                raise ValueError(f"El número total de nodos ({total_nodos}) no forma un cuadrado perfecto.")
 
+            # Verificar que sea divisible entre el número de nodos por gráfico proporcionado
+            if total_nodos % nodos_por_grafico != 0:
+                raise ValueError(f"El número total de nodos ({total_nodos}) no es divisible por nodos_por_grafico ({nodos_por_grafico}).")
+            
             # Dividir en gráficos individuales
-            num_graficos = total_nodos // (nodos_por_grafico ** 2)
-            true_vals_dividido = torch.split(true_batch, nodos_por_grafico ** 2)
-            pred_vals_dividido = torch.split(pred_batch, nodos_por_grafico ** 2)
+            true_vals_dividido = torch.split(true_batch, nodos_por_grafico)
+            pred_vals_dividido = torch.split(pred_batch, nodos_por_grafico)
             
             for true_vals, pred_vals in zip(true_vals_dividido, pred_vals_dividido):
                 
@@ -75,6 +74,7 @@ def evaluate(model, loader, device, error_threshold=5.0, plot_results=True):
     if plot_results and len(all_true_vals) > 0:
         idx = random.randint(0, len(all_true_vals) - 1)
         plot_temperature_maps(all_true_vals[idx], all_pred_vals[idx])
+        
     # Calcular métricas promedio para todo el DataLoader
     mean_mse = np.mean(all_mse)
     mean_mae = np.mean(all_mae)
