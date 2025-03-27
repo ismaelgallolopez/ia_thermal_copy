@@ -195,8 +195,8 @@ class PhysicsLossTransient(nn.Module):
     def forward(self, 
                 T_new,     # Temperatura en el instante n+1 (predicha por la red, por ej)
                 T_old,     # Temperatura en el instante n (condición conocida), 
-                heaters, 
-                interfaces, 
+                heaters_input, 
+                interfaces_input, 
                 Tenv):
         """
         T_new: tensor [batch_size, n_nodes] con la T en el paso n+1
@@ -207,25 +207,18 @@ class PhysicsLossTransient(nn.Module):
             rho*c*(espesor)*(dx*dy)*(T_new - T_old)/dt  -  [ Q - K*T_old - sigma*E*(T_old^4 - Tenv^4) ]
         """
 
-        
-        #Generación del vector Q
-        heaters = torch.flatten(heaters, start_dim=1)
-
-        interfaces = torch.flatten(interfaces, start_dim=1)
-
-        Q = heaters + interfaces
-        
-
         #Generación del vector T
         T_new = T_new.flatten(start_dim=1).transpose(0,1).cuda()  # shape => [n_nodes, batch_size]
         T_old = T_old.flatten(start_dim=1).transpose(0,1).cuda()
-        Q     = Q.transpose(0,1).cuda()
         Tenv  = Tenv.flatten(start_dim=1).transpose(0,1).cuda()
+        
+        Q = (heaters_input + interfaces_input).float().flatten(start_dim=1).transpose(0,1).cuda()
         
         # Calculamos lado derecho del balance (igual que en el solver)
         # [Q - K*T_old - sigma*E*(T_old^4 - Tenv^4)]
-        rhs = Q - torch.sparse.mm(self.K, T_old) \
-                  - self.Boltzmann_cte * torch.sparse.mm(self.E, (T_old**4 - Tenv**4))
+        rhs =   Q \
+                - torch.sparse.mm(self.K, T_old) \
+                - self.Boltzmann_cte * torch.sparse.mm(self.E, (torch.pow(T_old, 4) - torch.pow(Tenv, 4)))
                   
         # Calculamos lado izquierdo transitorio:
         #  rho*c*(espesor)*(dx*dy)*(T_new - T_old)/dt
@@ -233,15 +226,6 @@ class PhysicsLossTransient(nn.Module):
         lhs_trans = vol_heat * (T_new - T_old) / self.dt
 
         # ExcessEnergy = LHS - RHS
-        excessEnergy = lhs_trans - rhs  # [n_nodes, batch_size]
+        residual = lhs_trans - rhs  # [n_nodes, batch_size]
 
-        # excessEnergy = torch.zeros((self.n_nodes,Q.size(0)))
-
-        # T, Q, Tenv = T.cuda(), Q.cuda(), Tenv.cuda()
-        # T = torch.transpose(T, 0, 1)
-        # Q = torch.transpose(Q, 0, 1)
-        # Tenv = torch.transpose(Tenv, 0, 1)
-
-        # excessEnergy = torch.sparse.mm(self.K,T) + self.Boltzmann_cte*torch.sparse.mm(self.E,(T**4-Tenv**4))-Q
-
-        return torch.mean(torch.abs(excessEnergy))
+        return torch.mean(torch.abs(residual))
