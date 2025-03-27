@@ -12,7 +12,7 @@ np.set_printoptions(threshold=sys.maxsize)
 ######################################### PCB_case_1() ##############################################
 #####################################################################################################
 
-def PCB_case_1(L:float=0.1,thickness:float=0.001,m:int=3,board_k:float=10,ir_emmisivity:float=0.8,
+def PCB_case_1(L:float=0.1,thickness:float=0.001,m:int=3,board_k:float=15,ir_emmisivity:float=0.8,
                     T_interfaces:list=[250,250,250,250],Q_heaters:list=[1.0,1.0,1.0,1.0],Tenv:float=250,display:bool = False):
     """
     Caso 1. 
@@ -52,7 +52,7 @@ def PCB_case_1(L:float=0.1,thickness:float=0.001,m:int=3,board_k:float=10,ir_emm
 ######################################### PCB_case_2() ##############################################
 #####################################################################################################
 
-def PCB_case_2(L:float=0.1,thickness:float=0.001,m:int=3,board_k:float=10,ir_emmisivity:float=0.8,
+def PCB_case_2(L:float=0.1,thickness:float=0.001,m:int=3,board_k:float=15,ir_emmisivity:float=0.8,
                     T_interfaces:list=[250,250,250,250],Q_heaters:list=[1.0,1.0,1.0,1.0],Tenv:float=250,display:bool = False):
     """
     Caso 1
@@ -164,12 +164,12 @@ def PCB_solver_main(Lx:float,Ly:float,thickness:float,nx:int,ny:int,board_k:floa
                 if j+1 < ny:
                     K_rows.append(id)
                     K_cols.append(id+nx)
-                    K_data.append(-GLx)
+                    K_data.append(-GLy)
                     GLii += GLy
                 if j-1 >= 0:
                     K_rows.append(id)
                     K_cols.append(id-nx)
-                    K_data.append(-GLx)
+                    K_data.append(-GLy)
                     GLii += GLy
                 K_rows.append(id)
                 K_cols.append(id)

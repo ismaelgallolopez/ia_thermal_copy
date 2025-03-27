@@ -1,6 +1,7 @@
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
+import os
 
 #%%
 
@@ -118,26 +119,25 @@ def visualizar_valores_vectoreslatentes(output, target):
     
 #%%
 
-def plot_loss_evolution(train_loss, val_loss):
+def plot_loss_evolution(train_loss, test_loss):
     
     """
     Plot the training and validation loss
     
     Args:
     train_loss (list): list with the training loss
-    val_loss (list): list with the validation loss
+    test_loss (list): list with the test loss
     
     """
     
-    train_loss_plt = np.array(train_loss)
-    val_loss_plt = np.array([v for v in val_loss])
     epochs = np.arange(1, len(train_loss)+1)
     
     
     plt.plot(epochs, train_loss, label='Train')
-    plt.plot(epochs, val_loss, label='Validation')
+    plt.plot(epochs, test_loss, label='Test')
     plt.xlabel('Epochs')
     plt.ylabel('Loss')
+    plt.yscale('log')
     plt.legend()
     
     # Ajustar los ticks del eje x dinámicamente
@@ -155,7 +155,7 @@ def plot_loss_evolution(train_loss, val_loss):
     
 
 #%%
-def plot_error_map(y_pred, y_true, i=0, t=500):
+def plot_error_map(y_pred, y_true, i=0, t=0):
     """
     Muestra el mapa de temperaturas reales, predichas y el error (por pixel) en un instante concreto.
     Parámetros:
@@ -180,8 +180,132 @@ def plot_error_map(y_pred, y_true, i=0, t=500):
     plt.colorbar(im1, ax=axs[1])
 
     im2 = axs[2].imshow(abs_error, cmap='viridis')
-    axs[2].set_title("Error absoluto")
+    axs[2].set_title("Absolute error")  
     plt.colorbar(im2, ax=axs[2])
 
     plt.tight_layout()
     plt.show()
+    
+#%%
+def plot_se_map(y_pred, y_true, time=0, dt=1, show_pred=True, return_mse=False):
+    """
+    Muestra el mapa de temperaturas reales, predichas y el Squared Error (por pixel) en un instante concreto.
+    
+    Parámetros:
+        y_pred: array con shape (T, H, W)
+        y_true: tensor con shape (T, H, W)
+        time: instante de tiempo real (en segundos)
+        dt: intervalo de tiempo entre pasos
+        show_pred: si es True, muestra el mapa de temperaturas predichas también
+        return_mse: si es True, devuelve el valor del MSE
+    """
+    t = time // dt
+
+    real = y_true[t, :, :]
+    pred = y_pred[t, :, :]
+    sq_diff = (pred - real) ** 2
+    mse = np.mean(sq_diff)
+
+    if show_pred:
+        # Rango común de temperatura
+        vmin = min(real.min(), pred.min())
+        vmax = max(real.max(), pred.max())
+
+        fig, axs = plt.subplots(1, 3, figsize=(14, 4))
+        
+        im0 = axs[0].imshow(real, cmap='hot', vmin=vmin, vmax=vmax)
+        axs[0].set_title("Real temperature [K]")
+        plt.colorbar(im0, ax=axs[0])
+
+        im1 = axs[1].imshow(pred, cmap='hot', vmin=vmin, vmax=vmax)
+        axs[1].set_title("Predicted temperature [K]")
+        plt.colorbar(im1, ax=axs[1])
+
+        im2 = axs[2].imshow(sq_diff, cmap='viridis')
+        axs[2].set_title("Squared error [K²]")
+        plt.colorbar(im2, ax=axs[2])
+        
+    else:
+        fig, ax = plt.subplots(1, 1, figsize=(5, 4))
+        
+        im = ax.imshow(sq_diff, cmap='viridis')
+        ax.set_title("Squared error [K²]")
+        plt.colorbar(im, ax=ax)
+
+    fig.suptitle(f'Temperature map at t = {time:.2f} s', fontsize=14)
+    plt.tight_layout(rect=[0, 0, 1, 0.95])
+    plt.show()
+
+    print(f"MSE: {mse:.8f} K^2")
+
+    if return_mse:
+        return mse
+        
+#%% 
+def plot_nodes_evolution(y_pred, y_true, nodes_idx, dt=1, together=True, save_as_pdf=False, filename='nodes_evolution'):
+    """
+    Muestra la evolución temporal de las temperaturas reales y predichas en una serie de nodos.
+    
+    Parámetros:
+        y_pred: array con shape (T, H, W)
+        y_true: array con shape (T, H, W)
+        nodes_idx: lista de índices de los nodos a mostrar [(idx1, idy1), (idx2, idy2), ...]
+        dt: intervalo de tiempo entre cada paso de tiempo
+        together: si es True, muestra todas las evoluciones en un solo gráfico
+        save_as_pdf: si es True, guarda la figura como PDF en la carpeta 'figures'
+        filename: nombre base del archivo (sin extensión)
+    """
+    time = np.arange(y_pred.shape[0]) * dt
+
+    if together:
+        plt.figure(figsize=(12, 6))
+        
+        for i, node_idx in enumerate(nodes_idx):
+            color = plt.cm.tab10(i % 10)
+            label = f'Node ({node_idx[0]}, {node_idx[1]})'
+
+            y_true_node = y_true[:, node_idx[0], node_idx[1]]
+            y_pred_node = y_pred[:, node_idx[0], node_idx[1]]
+
+            plt.plot(time, y_true_node, label=f'{label} - Ground Truth', color=color)
+            plt.plot(time, y_pred_node, 'x', label=f'{label} - Prediction', color=color)
+        
+        plt.xlabel('Time [s]')
+        plt.ylabel('Temperature [K]')
+        plt.title('Time evolution of temperature in selected nodes')
+        plt.xlim(time[0], time[-1])
+        plt.legend()
+        plt.grid(True)
+        plt.tight_layout()
+
+        if save_as_pdf:
+            os.makedirs('figures', exist_ok=True)
+            plt.savefig(f'figures/{filename}.pdf', format='pdf')
+        plt.show()
+
+    else:
+        fig, axs = plt.subplots(len(nodes_idx), 1, figsize=(12, 3 * len(nodes_idx)), sharex=True)
+        if len(nodes_idx) == 1:
+            axs = [axs]
+
+        for i, node_idx in enumerate(nodes_idx):
+            axs[i].plot(time, y_true[:, node_idx[0], node_idx[1]], label='Ground truth', color='blue')
+            axs[i].plot(time, y_pred[:, node_idx[0], node_idx[1]], 'x', label='Prediction', color='orange')
+            axs[i].set_title(f"Node ({node_idx[0]}, {node_idx[1]})")
+
+            axs[i].set_ylabel('Temperature [K]')
+            axs[i].set_xlim(time[0], time[-1])
+
+            if i == len(nodes_idx) - 1:
+                axs[i].set_xlabel('Time [s]')
+            if i == 0:
+                axs[i].legend(loc='upper right')
+
+        fig.suptitle('Time evolution of temperature in selected nodes', fontsize=16)
+        fig.align_ylabels()
+        plt.tight_layout(rect=[0, 0, 1, 0.96])
+
+        if save_as_pdf:
+            os.makedirs('figures', exist_ok=True)
+            fig.savefig(f'figures/{filename}.pdf', format='pdf')
+        plt.show()
