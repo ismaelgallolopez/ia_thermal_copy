@@ -5,6 +5,9 @@ class LaEnergiaNoAparece(nn.Module):
     def __init__(self, L:float=0.1,thickness:float=0.001,board_k:float=15,ir_emmisivity:float=0.8):
         super(LaEnergiaNoAparece, self).__init__()
         
+        # Seleccionar dispositivo dinámicamente
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        
         nx = 13
         ny = 13
 
@@ -61,7 +64,7 @@ class LaEnergiaNoAparece(nn.Module):
         values = torch.FloatTensor(K_data)
         shape = torch.Size([self.n_nodes, self.n_nodes])
         self.K = torch.sparse_coo_tensor(indices, values, shape, dtype=torch.float)
-        self.K = self.K.cuda()
+        self.K = self.K.to(self.device)
 
         E_data = []
         E_id = []
@@ -73,15 +76,15 @@ class LaEnergiaNoAparece(nn.Module):
         values = torch.tensor(E_data, dtype=torch.float32)  
         size = torch.Size([self.n_nodes, self.n_nodes])  
         self.E = torch.sparse_coo_tensor(indices, values, size)
-        self.E = self.E.cuda()
+        self.E = self.E.to(self.device)
 
 
     def forward(self, outputs, heaters, interfaces, Tenv):
-        
+                
         #Generación del vector Q
-        heaters = torch.flatten(heaters, start_dim=1)
+        heaters = torch.flatten(heaters, start_dim=1).to(self.device)
 
-        interfaces = torch.flatten(interfaces, start_dim=1)
+        interfaces = torch.flatten(interfaces, start_dim=1).to(self.device)
 
         Q = heaters + interfaces
         
@@ -89,13 +92,13 @@ class LaEnergiaNoAparece(nn.Module):
         #Generación del vector T
         T = torch.flatten(outputs, start_dim=1)
 
-        excessEnergy = torch.zeros((self.n_nodes,Q.size(0)))
+        excessEnergy = torch.zeros((self.n_nodes,Q.size(0)), device=self.device)
 
 
-        T, Q, Tenv = T.cuda(), Q.cuda(), Tenv.cuda()
-        T = torch.transpose(T, 0, 1)
-        Q = torch.transpose(Q, 0, 1)
-        Tenv = torch.transpose(Tenv, 0, 1)
+        # T, Q, Tenv = T.cuda(), Q.cuda(), Tenv.cuda()
+        # T = torch.transpose(T, 0, 1)
+        # Q = torch.transpose(Q, 0, 1)
+        Tenv = torch.transpose(Tenv, 0, 1).to(self.device)
 
         excessEnergy = torch.sparse.mm(self.K,T) + self.Boltzmann_cte*torch.sparse.mm(self.E,(T**4-Tenv**4))-Q
 
@@ -114,6 +117,9 @@ class PhysicsLossTransient(nn.Module):
                  dt: float = 1
                  ):
         super(PhysicsLossTransient, self).__init__()
+        
+        # Seleccionar dispositivo dinámicamente
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         nx = 13
         ny = 13
@@ -176,7 +182,7 @@ class PhysicsLossTransient(nn.Module):
         indices = torch.LongTensor([K_rows, K_cols])
         values = torch.FloatTensor(K_data)
         shape = torch.Size([self.n_nodes, self.n_nodes])
-        self.K = torch.sparse_coo_tensor(indices, values, shape, dtype=torch.float).cuda()
+        self.K = torch.sparse_coo_tensor(indices, values, shape, dtype=torch.float).to(self.device)
 
         E_data = []
         E_id = []
@@ -189,7 +195,7 @@ class PhysicsLossTransient(nn.Module):
         indices = torch.tensor([E_id, E_id], dtype=torch.int64) 
         values = torch.tensor(E_data, dtype=torch.float32)  
         size = torch.Size([self.n_nodes, self.n_nodes])  
-        self.E = torch.sparse_coo_tensor(indices, values, size).cuda()
+        self.E = torch.sparse_coo_tensor(indices, values, size).to(self.device)
 
 
     def forward(self, 
@@ -208,11 +214,11 @@ class PhysicsLossTransient(nn.Module):
         """
 
         #Generación del vector T
-        T_new = T_new.flatten(start_dim=1).transpose(0,1).cuda()  # shape => [n_nodes, batch_size]
-        T_old = T_old.flatten(start_dim=1).transpose(0,1).cuda()
-        Tenv  = Tenv.flatten(start_dim=1).transpose(0,1).cuda()
+        T_new = T_new.flatten(start_dim=1).transpose(0,1).to(self.device)  # shape => [n_nodes, batch_size]
+        T_old = T_old.flatten(start_dim=1).transpose(0,1).to(self.device)
+        Tenv  = Tenv.flatten(start_dim=1).transpose(0,1).to(self.device)
         
-        Q = (heaters_input + interfaces_input).float().flatten(start_dim=1).transpose(0,1).cuda()
+        Q = (heaters_input + interfaces_input).float().flatten(start_dim=1).transpose(0,1).to(self.device)
         
         # Calculamos lado derecho del balance (igual que en el solver)
         # [Q - K*T_old - sigma*E*(T_old^4 - Tenv^4)]
