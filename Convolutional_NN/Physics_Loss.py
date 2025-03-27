@@ -47,12 +47,12 @@ class LaEnergiaNoAparece(nn.Module):
                     if j+1 < ny:
                         K_rows.append(id)
                         K_cols.append(id+nx)
-                        K_data.append(-GLx)
+                        K_data.append(-GLy)
                         GLii += GLy
                     if j-1 >= 0:
                         K_rows.append(id)
                         K_cols.append(id-nx)
-                        K_data.append(-GLx)
+                        K_data.append(-GLy)
                         GLii += GLy
                     K_rows.append(id)
                     K_cols.append(id)
