@@ -309,3 +309,51 @@ def plot_nodes_evolution(y_pred, y_true, nodes_idx, dt=1, together=True, save_as
             os.makedirs('figures', exist_ok=True)
             fig.savefig(f'figures/{filename}.pdf', format='pdf')
         plt.show()
+        
+        
+#%%
+
+def compare_error_maps_2d(err1_map, err2_map, 
+                          titles=("Error Map 1", "Error Map 2"),
+                          return_mse=False,
+                          save_as_pdf=False,
+                          filename='compare_error_maps'):
+    """
+    Compara visualmente dos mapas de error 2D (por ejemplo, error cuadrático por píxel).
+
+    Parámetros:
+        err1_map: array (H, W) – primer mapa de error
+        err2_map: array (H, W) – segundo mapa de error
+        titles: tupla de strings – títulos personalizados para los mapas
+        return_mse: bool – si es True, devuelve el MSE global de cada mapa
+        save_as_pdf: bool – si es True, guarda la figura como PDF en 'figures'
+        filename: string – nombre base del archivo (sin extensión)
+
+    Devuelve:
+        mse1, mse2: MSE global para cada mapa (si return_mse == True)
+    """
+    mse1 = np.mean(err1_map)
+    mse2 = np.mean(err2_map)
+
+    vmax = max(err1_map.max(), err2_map.max())
+
+    fig, axs = plt.subplots(1, 2, figsize=(12, 4))
+
+    im1 = axs[0].imshow(err1_map, cmap='viridis', vmin=0, vmax=vmax)
+    axs[0].set_title(f"{titles[0]}\nMSE = {mse1:.6f} K²")
+    plt.colorbar(im1, ax=axs[0])
+
+    im2 = axs[1].imshow(err2_map, cmap='viridis', vmin=0, vmax=vmax)
+    axs[1].set_title(f"{titles[1]}\nMSE = {mse2:.6f} K²")
+    plt.colorbar(im2, ax=axs[1])
+
+    plt.tight_layout()
+
+    if save_as_pdf:
+        os.makedirs('figures', exist_ok=True)
+        plt.savefig(f'figures/{filename}.pdf', format='pdf')
+
+    plt.show()
+
+    if return_mse:
+        return mse1, mse2
