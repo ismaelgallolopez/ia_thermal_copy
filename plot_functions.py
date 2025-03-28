@@ -133,8 +133,8 @@ def plot_loss_evolution(train_loss, test_loss):
     epochs = np.arange(1, len(train_loss)+1)
     
     
-    plt.plot(epochs, train_loss, label='Train')
-    plt.plot(epochs, test_loss, label='Test')
+    plt.plot(epochs, train_loss, label='Train', color='black')
+    plt.plot(epochs, test_loss, label='Test', color='red')
     plt.xlabel('Epochs')
     plt.ylabel('Loss')
     plt.yscale('log')
