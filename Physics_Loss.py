@@ -329,3 +329,48 @@ class BoundaryLoss(nn.Module):
         loss = torch.mean(torch.abs(T_interfaces - interfaces_target)**2)
         
         return loss
+    
+class TotalLoss(nn.Module):
+    def __init__(self, 
+                 mse_weight=1.0,
+                 physics_weight=1.0,
+                 boundary_weight=1.0,
+                 denormalize_output_fn=None,
+                 physics_params=None,
+                 boundary_params=None):
+        super(TotalLoss, self).__init__()
+
+        # Pérdida de reconstrucción supervisada
+        self.reconstruction = nn.MSELoss()
+        self.lambda_rec = mse_weight
+        self.lambda_phys = physics_weight
+        self.lambda_bdry = boundary_weight
+        self.denormalize = denormalize_output_fn
+
+        # Parámetros por defecto si no se pasan
+        if physics_params is None:
+            physics_params = {}
+        if boundary_params is None:
+            boundary_params = {}
+
+        # Construir funciones físicas y de contorno internamente
+        self.physics_loss = PhysicsLossTransient(**physics_params)
+        self.boundary_loss = BoundaryLoss(**boundary_params)
+
+    def forward(self, y_hat, y, heaters, interfaces, Tenv):
+        # MSE supervisado en espacio normalizado
+        loss_rec = self.reconstruction(y_hat, y)
+
+        # Denormalización antes de aplicar la física
+        y_hat_denorm = self.denormalize(y_hat)
+        y_denorm     = self.denormalize(y)
+
+        # Física transitoria
+        loss_phys = self.physics_loss(y_hat_denorm, y_denorm, heaters, interfaces, Tenv)
+
+        # Condiciones de contorno
+        loss_bdry = self.boundary_loss(y_hat_denorm, interfaces)
+
+        # Combinación total
+        total = self.lambda_rec * loss_rec + self.lambda_phys * loss_phys + self.lambda_bdry * loss_bdry
+        return total, loss_rec.item(), loss_phys.item(), loss_bdry.item()
