@@ -5,7 +5,7 @@ import torch.nn.functional as F
 from torch_geometric.nn import GCNConv
 from torch.nn import Linear, ModuleList
 
-class GCN(torch.nn.Module):  
+class GCN(torch.nn.Module):  ### Pequeña: Optimizacion con sequential en vez de module list / torch.jit para GPU
     def __init__(self, input_dim, hidden_dim, output_dim, num_layers):
         super(GCN, self).__init__()
         self.num_layers = num_layers

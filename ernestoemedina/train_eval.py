@@ -34,8 +34,24 @@ def train(model, loader, optimizer, device):
 
 
 # Evaluate
-def evaluate(model, loader, device, nodos_por_grafico=None, error_threshold=5.0, 
-             plot_results=True, normalize=True):
+def evaluate(model, loader, device, nodos_por_grafico=None, error_threshold=5.0, #Valores por defecto si no se definen en main
+             percentage_threshold=None, plot_results=True, normalize=True):
+    """
+    Evalúa el modelo GCN utilizando un conjunto de datos y permite calcular el error en Kelvin o en porcentaje.
+    
+    Args:
+        model (torch.nn.Module): Modelo GCN a evaluar.
+        loader (DataLoader): DataLoader del conjunto de datos.
+        device (torch.device): Dispositivo para evaluar el modelo (CPU o GPU).
+        nodos_por_grafico (int): Número total de nodos por gráfico.
+        error_threshold (float): Error permitido en Kelvin si se usa error absoluto.
+        percentage_threshold (float): Umbral del error en porcentaje si se usa error relativo.
+        plot_results (bool): Indica si se deben graficar los resultados.
+        normalize (bool): Indica si se debe trabajar con datos normalizados o desnormalizados.
+        
+    Returns:
+        mean_mse, mean_mae, mean_r2, mean_accuracy: Métricas promedio para todo el conjunto de datos.
+    """
     global target_mean, target_std
     model.eval()
     all_mse, all_mae, all_r2, all_accuracy = [], [], [], []
@@ -68,18 +84,29 @@ def evaluate(model, loader, device, nodos_por_grafico=None, error_threshold=5.0,
                 
                 # Calcular métricas en la escala correcta
                 if normalize:
-                    # Métricas sobre datos normalizados
                     mse = mean_squared_error(true_vals, pred_vals)
                     mae = mean_absolute_error(true_vals, pred_vals)
                     r2 = r2_score(true_vals, pred_vals)
-                    within_threshold = torch.abs(true_vals - pred_vals) <= (error_threshold / target_std)
+                    
+                    if percentage_threshold is not None:
+                        # Calcular error porcentual sobre datos normalizados
+                        relative_error = torch.abs((true_vals - pred_vals) / true_vals) * 100
+                        within_threshold = relative_error <= percentage_threshold
+                    else:
+                        within_threshold = torch.abs(true_vals - pred_vals) <= (error_threshold / target_std)
+                        
                 else:
-                    # Métricas sobre datos desnormalizados
                     mse = mean_squared_error(true_vals, pred_vals)
                     mae = mean_absolute_error(true_vals, pred_vals)
                     r2 = r2_score(true_vals, pred_vals)
-                    within_threshold = torch.abs(true_vals - pred_vals) <= error_threshold
-                
+                    
+                    if percentage_threshold is not None:
+                        # Calcular error porcentual sobre datos desnormalizados
+                        relative_error = torch.abs((true_vals - pred_vals) / true_vals) * 100
+                        within_threshold = relative_error <= percentage_threshold
+                    else:
+                        within_threshold = torch.abs(true_vals - pred_vals) <= error_threshold
+
                 accuracy_within_threshold = torch.sum(within_threshold.float()).item() / len(true_vals) * 100
 
                 all_mse.append(mse)

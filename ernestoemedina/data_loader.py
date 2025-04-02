@@ -16,7 +16,7 @@ def load_pcb_dataset(file_path):
     dataset = torch.load(file_path)
     graphs = []
 
-    for i in range(len(dataset)):
+    for i in range(len(dataset)): ### Notable: Optimizar evitando que se cree la matriz de adyacencia cada vez que se llame a load_...
         sample_input, sample_output, sample_scalar = dataset[i]
 
         # Extraer las matrices de potencias e interfaces
