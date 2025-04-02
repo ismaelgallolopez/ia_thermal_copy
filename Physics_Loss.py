@@ -373,4 +373,4 @@ class TotalLoss(nn.Module):
 
         # Combinación total
         total = self.lambda_rec * loss_rec + self.lambda_phys * loss_phys + self.lambda_bdry * loss_bdry
-        return total, loss_rec.item(), loss_phys.item(), loss_bdry.item()
+        return total, loss_rec, loss_phys, loss_bdry

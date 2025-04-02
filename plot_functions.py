@@ -332,8 +332,8 @@ def compare_error_maps_2d(err1_map, err2_map,
     Devuelve:
         mse1, mse2: MSE global para cada mapa (si return_mse == True)
     """
-    mse1 = np.mean(err1_map)
-    mse2 = np.mean(err2_map)
+    mse1 = np.mean(err1_map**2)
+    mse2 = np.mean(err2_map**2)
 
     vmax = max(err1_map.max(), err2_map.max())
 
@@ -357,3 +357,57 @@ def compare_error_maps_2d(err1_map, err2_map,
 
     if return_mse:
         return mse1, mse2
+    
+
+#%%
+
+def plot_prediction_and_error(y_pred, y_true, t=0, cmap='hot', save_as_pdf=False, filename='prediction_and_error'):
+    """
+    Representa la predicción de un modelo junto con el error absoluto en cada punto.
+    
+    Parámetros:
+        y_pred: array o tensor con shape (T, H, W) – predicciones del modelo
+        y_true: array o tensor con shape (T, H, W) – valores reales del solver
+        t: int – índice del tiempo que se desea visualizar
+        cmap: str – esquema de colores para los mapas de temperatura
+        save_as_pdf: bool – si es True, guarda la figura como PDF en 'figures'
+        filename: str – nombre base del archivo (sin extensión)
+    """
+    # Asegurarse de que los datos estén en formato NumPy
+    if isinstance(y_pred, torch.Tensor):
+        y_pred = y_pred.detach().cpu().numpy()
+    if isinstance(y_true, torch.Tensor):
+        y_true = y_true.detach().cpu().numpy()
+
+    # Extraer los datos en el tiempo t
+    pred = y_pred[t, :, :]
+    real = y_true[t, :, :]
+    abs_error = np.abs(pred - real)
+
+    # Rango común de temperatura para predicción y valores reales
+    vmin = min(real.min(), pred.min())
+    vmax = max(real.max(), pred.max())
+
+    # Crear la figura con dos subplots
+    fig, axs = plt.subplots(1, 2, figsize=(12, 5))
+
+    # Mapa de predicción
+    im0 = axs[0].imshow(pred, cmap=cmap, vmin=vmin, vmax=vmax)
+    axs[0].set_title("Predicted Temperature [K]")
+    plt.colorbar(im0, ax=axs[0])
+
+    # Mapa de error absoluto
+    im1 = axs[1].imshow(abs_error, cmap='viridis')
+    axs[1].set_title("Absolute Error [K]")
+    plt.colorbar(im1, ax=axs[1])
+
+    # Ajustar diseño
+    plt.tight_layout()
+
+    # Guardar como PDF si es necesario
+    if save_as_pdf:
+        os.makedirs('figures', exist_ok=True)
+        plt.savefig(f'figures/{filename}.pdf', format='pdf')
+
+    # Mostrar la figura
+    plt.show()
